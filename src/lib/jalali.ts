@@ -28,8 +28,8 @@ export const persianNumbers = (num: number | string): string => {
 };
 
 export const getJalaliMonthDays = (year: number, month: number) => {
+  const daysInMonth = moment.jDaysInMonth(year, month - 1); // month is 0-indexed
   const m = moment(`${year}/${month}/1`, 'jYYYY/jM/jD');
-  const daysInMonth = m.jDaysInMonth();
   const firstDayOfWeek = m.day(); // 0 = Sunday, 6 = Saturday
   
   return { daysInMonth, firstDayOfWeek };
