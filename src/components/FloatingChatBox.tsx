@@ -28,7 +28,7 @@ import {
   getQuizCompletion, type PersonalityQuestion 
 } from "@/lib/personalityQuiz";
 
-// Using CouncilMember from councilOfGeniuses.ts
+// Using allCouncilMembers from councilOfGeniuses.ts instead of local definition
 
 interface ChatMessage {
   id: string;
@@ -61,21 +61,8 @@ interface InteractiveQuestion {
   councilMember?: CouncilMember;
 }
 
-// Council of Geniuses - 10 Members (5 Fixed + 5 Dynamic)
-const councilMembers: CouncilMember[] = [
-  // Fixed Members
-  { id: 'psych', name: 'دکتر روانشناس', role: 'روانشناس بالینی', expertise: ['رفتار', 'احساسات', 'انگیزه'], avatar: '🧠', isFixed: true },
-  { id: 'strategist', name: 'استراتژیست', role: 'مشاور استراتژی', expertise: ['برنامه‌ریزی', 'اهداف', 'مسیر'], avatar: '🎯', isFixed: true },
-  { id: 'career', name: 'مشاور شغلی', role: 'متخصص توسعه حرفه‌ای', expertise: ['کار', 'مسیر شغلی', 'مهارت'], avatar: '💼', isFixed: true },
-  { id: 'health', name: 'متخصص سلامت', role: 'مربی سلامت جسم و ذهن', expertise: ['سلامت', 'انرژی', 'تعادل'], avatar: '💪', isFixed: true },
-  { id: 'innovator', name: 'نوآور', role: 'متخصص خلاقیت', expertise: ['ایده', 'خلاقیت', 'نوآوری'], avatar: '💡', isFixed: true },
-  // Dynamic Members (Based on user profile)
-  { id: 'coach', name: 'مربی عملکرد', role: 'مربی بهره‌وری', expertise: ['بهره‌وری', 'عادت', 'تمرکز'], avatar: '⚡', isFixed: false },
-  { id: 'financial', name: 'مشاور مالی', role: 'برنامه‌ریز مالی', expertise: ['مالی', 'سرمایه', 'بودجه'], avatar: '💰', isFixed: false },
-  { id: 'relationship', name: 'متخصص روابط', role: 'مشاور ارتباطات', expertise: ['روابط', 'ارتباط', 'اجتماعی'], avatar: '❤️', isFixed: false },
-  { id: 'learning', name: 'مربی یادگیری', role: 'متخصص آموزش', expertise: ['یادگیری', 'مطالعه', 'مهارت'], avatar: '📚', isFixed: false },
-  { id: 'mindfulness', name: 'مربی ذهن‌آگاهی', role: 'متخصص مدیتیشن', expertise: ['آرامش', 'ذهن‌آگاهی', 'استرس'], avatar: '🧘', isFixed: false },
-];
+// Using allCouncilMembers from councilOfGeniuses.ts
+const councilMembers = allCouncilMembers;
 
 // Mock data for demonstration
 const mockNotifications: Notification[] = [
@@ -358,8 +345,7 @@ export const FloatingChatBox = () => {
           size="icon"
           className={cn(
             "h-14 w-14 rounded-full shadow-lg transition-all duration-300",
-            isOpen && "rotate-90",
-            totalBadge > 0 && "animate-pulse"
+            isOpen && "rotate-90"
           )}
         >
           {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
