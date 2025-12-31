@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { 
   MessageCircle, X, Send, Bell, HelpCircle, 
   ChevronDown, Play, ThumbsUp, ThumbsDown,
-  CheckCheck, Circle, Users, AlertTriangle
+  CheckCheck, Circle, Users, AlertTriangle, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,16 +15,20 @@ import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { persianNumbers, toJalali } from "@/lib/jalali";
+import { 
+  trackEvent, getPerception, generateNudges, 
+  analyzeRecentBehavior, type NudgeMessage 
+} from "@/lib/behaviorMonitor";
+import { 
+  allCouncilMembers, getCouncilConsultation, 
+  type CouncilMember 
+} from "@/lib/councilOfGeniuses";
+import { 
+  getUnansweredQuestions, savePersonalityAnswer,
+  getQuizCompletion, type PersonalityQuestion 
+} from "@/lib/personalityQuiz";
 
-// Council Members Types
-interface CouncilMember {
-  id: string;
-  name: string;
-  role: string;
-  expertise: string[];
-  avatar: string;
-  isFixed: boolean;
-}
+// Using CouncilMember from councilOfGeniuses.ts
 
 interface ChatMessage {
   id: string;
