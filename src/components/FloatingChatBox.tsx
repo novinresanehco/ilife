@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { 
   MessageCircle, X, Send, Bell, HelpCircle, 
   ChevronDown, Play, ThumbsUp, ThumbsDown,
@@ -349,17 +348,12 @@ export const FloatingChatBox = () => {
   return (
     <>
       {/* Floating Button */}
-      <motion.div
-        className="fixed bottom-6 left-6 z-[100]"
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ delay: 0.5, type: "spring" }}
-      >
+      <div className="fixed bottom-6 left-6 z-[100] animate-in zoom-in duration-500">
         <Button
           onClick={() => setIsOpen(!isOpen)}
           size="icon"
           className={cn(
-            "h-14 w-14 rounded-full shadow-lg transition-all",
+            "h-14 w-14 rounded-full shadow-lg transition-all duration-300",
             isOpen && "rotate-90",
             totalBadge > 0 && "animate-pulse"
           )}
@@ -374,204 +368,196 @@ export const FloatingChatBox = () => {
             {persianNumbers(totalBadge)}
           </Badge>
         )}
-      </motion.div>
+      </div>
 
       {/* Chat Panel */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-24 left-6 z-[100] w-[380px] max-w-[calc(100vw-48px)]"
-          >
-            <div className="bg-card rounded-2xl shadow-2xl border border-border overflow-hidden">
-              {/* Header */}
-              <div className="bg-primary/5 p-4 border-b border-border">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Users className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm">شورای هوشمند LifeOS</h3>
-                      <p className="text-xs text-muted-foreground">۱۰ متخصص آماده کمک</p>
-                    </div>
+      {isOpen && (
+        <div className="fixed bottom-24 left-6 z-[100] w-[380px] max-w-[calc(100vw-48px)] animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="bg-card rounded-2xl shadow-2xl border border-border overflow-hidden">
+            {/* Header */}
+            <div className="bg-primary/5 p-4 border-b border-border">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-primary" />
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
+                  <div>
+                    <h3 className="font-semibold text-sm">شورای هوشمند LifeOS</h3>
+                    <p className="text-xs text-muted-foreground">۱۰ متخصص آماده کمک</p>
+                  </div>
                 </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
               </div>
-
-              {/* Tabs */}
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="w-full grid grid-cols-3 rounded-none border-b h-10">
-                  <TabsTrigger value="chat" className="text-xs gap-1 h-9">
-                    <MessageCircle className="w-3 h-3" />
-                    گفتگو
-                  </TabsTrigger>
-                  <TabsTrigger value="questions" className="text-xs gap-1 h-9 relative">
-                    <HelpCircle className="w-3 h-3" />
-                    سوالات
-                    {unansweredQuestions > 0 && (
-                      <Badge variant="secondary" className="h-4 w-4 p-0 text-[10px] absolute -top-0.5 -right-0.5">
-                        {persianNumbers(unansweredQuestions)}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="notifications" className="text-xs gap-1 h-9 relative">
-                    <Bell className="w-3 h-3" />
-                    اعلان‌ها
-                    {unreadNotifications > 0 && (
-                      <Badge variant="destructive" className="h-4 w-4 p-0 text-[10px] absolute -top-0.5 -right-0.5">
-                        {persianNumbers(unreadNotifications)}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* Chat Tab */}
-                <TabsContent value="chat" className="m-0">
-                  <ScrollArea className="h-[300px]">
-                    <div className="p-3 space-y-3">
-                      {messages.map((message) => (
-                        <div 
-                          key={message.id}
-                          className={cn(
-                            "flex",
-                            message.fromSystem ? "justify-start" : "justify-end"
-                          )}
-                        >
-                          <div className={cn(
-                            "max-w-[85%] p-3 rounded-2xl",
-                            message.fromSystem 
-                              ? "bg-accent text-accent-foreground rounded-tr-sm" 
-                              : "bg-primary text-primary-foreground rounded-tl-sm"
-                          )}>
-                            {message.councilMember && message.fromSystem && (
-                              <div className="flex items-center gap-2 mb-1 pb-1 border-b border-border/30">
-                                <span className="text-lg">{message.councilMember.avatar}</span>
-                                <span className="text-xs font-medium">{message.councilMember.name}</span>
-                              </div>
-                            )}
-                            <p className="text-xs leading-relaxed">{message.content}</p>
-                            <p className={cn(
-                              "text-[10px] mt-1",
-                              message.fromSystem ? "text-muted-foreground" : "text-primary-foreground/70"
-                            )}>
-                              {toJalali(message.timestamp)}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                  <div className="p-3 border-t border-border">
-                    <div className="flex gap-2">
-                      <Input 
-                        placeholder="سوال خود را بپرسید..." 
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                        className="text-xs h-9"
-                      />
-                      <Button onClick={sendMessage} size="icon" className="h-9 w-9 shrink-0">
-                        <Send className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </TabsContent>
-
-                {/* Questions Tab */}
-                <TabsContent value="questions" className="m-0">
-                  <ScrollArea className="h-[340px]">
-                    <div className="p-3 space-y-3">
-                      {questions.map((question) => (
-                        <div 
-                          key={question.id}
-                          className={cn(
-                            "bg-accent/50 rounded-xl p-3 border border-border",
-                            question.answered && "opacity-60"
-                          )}
-                        >
-                          {question.councilMember && (
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-sm">{question.councilMember.avatar}</span>
-                              <span className="text-xs text-muted-foreground">{question.councilMember.name}</span>
-                              <Badge variant="outline" className="text-[10px] h-5 mr-auto">{question.category}</Badge>
-                            </div>
-                          )}
-                          <p className="text-xs font-medium mb-3">{question.text}</p>
-                          {renderQuestionInput(question)}
-                        </div>
-                      ))}
-                      {questions.every(q => q.answered) && (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <CheckCheck className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
-                          <p className="text-xs">همه سوالات پاسخ داده شده!</p>
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-
-                {/* Notifications Tab */}
-                <TabsContent value="notifications" className="m-0">
-                  <ScrollArea className="h-[340px]">
-                    <div className="p-3 space-y-2">
-                      {notifications.map((notification) => (
-                        <div 
-                          key={notification.id}
-                          className={cn(
-                            "p-3 rounded-xl border transition-all cursor-pointer",
-                            typeStyles[notification.type],
-                            !notification.read && "ring-2 ring-offset-1 ring-primary/30"
-                          )}
-                          onClick={() => markAsRead(notification.id)}
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className="mt-0.5">
-                              {notification.read ? (
-                                <CheckCheck className="w-3 h-3" />
-                              ) : (
-                                <Circle className="w-3 h-3 fill-current" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              {notification.councilMember && (
-                                <div className="flex items-center gap-1 mb-1">
-                                  <span className="text-sm">{notification.councilMember.avatar}</span>
-                                  <span className="text-[10px] text-muted-foreground">{notification.councilMember.name}</span>
-                                </div>
-                              )}
-                              <p className={cn("text-xs", !notification.read && "font-medium")}>
-                                {notification.content}
-                              </p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] opacity-70">{toJalali(notification.timestamp)}</span>
-                                <Badge variant="outline" className="text-[10px] h-4">
-                                  {typeLabels[notification.type]}
-                                </Badge>
-                              </div>
-                            </div>
-                            {notification.important && (
-                              <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0">
-                                <Play className="w-3 h-3" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-              </Tabs>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="w-full grid grid-cols-3 rounded-none border-b h-10">
+                <TabsTrigger value="chat" className="text-xs gap-1 h-9">
+                  <MessageCircle className="w-3 h-3" />
+                  گفتگو
+                </TabsTrigger>
+                <TabsTrigger value="questions" className="text-xs gap-1 h-9 relative">
+                  <HelpCircle className="w-3 h-3" />
+                  سوالات
+                  {unansweredQuestions > 0 && (
+                    <Badge variant="secondary" className="h-4 w-4 p-0 text-[10px] absolute -top-0.5 -right-0.5">
+                      {persianNumbers(unansweredQuestions)}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="notifications" className="text-xs gap-1 h-9 relative">
+                  <Bell className="w-3 h-3" />
+                  اعلان‌ها
+                  {unreadNotifications > 0 && (
+                    <Badge variant="destructive" className="h-4 w-4 p-0 text-[10px] absolute -top-0.5 -right-0.5">
+                      {persianNumbers(unreadNotifications)}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Chat Tab */}
+              <TabsContent value="chat" className="m-0">
+                <ScrollArea className="h-[300px]">
+                  <div className="p-3 space-y-3">
+                    {messages.map((message) => (
+                      <div 
+                        key={message.id}
+                        className={cn(
+                          "flex",
+                          message.fromSystem ? "justify-start" : "justify-end"
+                        )}
+                      >
+                        <div className={cn(
+                          "max-w-[85%] p-3 rounded-2xl",
+                          message.fromSystem 
+                            ? "bg-accent text-accent-foreground rounded-tr-sm" 
+                            : "bg-primary text-primary-foreground rounded-tl-sm"
+                        )}>
+                          {message.councilMember && message.fromSystem && (
+                            <div className="flex items-center gap-2 mb-1 pb-1 border-b border-border/30">
+                              <span className="text-lg">{message.councilMember.avatar}</span>
+                              <span className="text-xs font-medium">{message.councilMember.name}</span>
+                            </div>
+                          )}
+                          <p className="text-xs leading-relaxed">{message.content}</p>
+                          <p className={cn(
+                            "text-[10px] mt-1",
+                            message.fromSystem ? "text-muted-foreground" : "text-primary-foreground/70"
+                          )}>
+                            {toJalali(message.timestamp)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+                <div className="p-3 border-t border-border">
+                  <div className="flex gap-2">
+                    <Input 
+                      placeholder="سوال خود را بپرسید..." 
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                      className="text-xs h-9"
+                    />
+                    <Button onClick={sendMessage} size="icon" className="h-9 w-9 shrink-0">
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Questions Tab */}
+              <TabsContent value="questions" className="m-0">
+                <ScrollArea className="h-[340px]">
+                  <div className="p-3 space-y-3">
+                    {questions.map((question) => (
+                      <div 
+                        key={question.id}
+                        className={cn(
+                          "bg-accent/50 rounded-xl p-3 border border-border",
+                          question.answered && "opacity-60"
+                        )}
+                      >
+                        {question.councilMember && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm">{question.councilMember.avatar}</span>
+                            <span className="text-xs text-muted-foreground">{question.councilMember.name}</span>
+                            <Badge variant="outline" className="text-[10px] h-5 mr-auto">{question.category}</Badge>
+                          </div>
+                        )}
+                        <p className="text-xs font-medium mb-3">{question.text}</p>
+                        {renderQuestionInput(question)}
+                      </div>
+                    ))}
+                    {questions.every(q => q.answered) && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <CheckCheck className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
+                        <p className="text-xs">همه سوالات پاسخ داده شده!</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+
+              {/* Notifications Tab */}
+              <TabsContent value="notifications" className="m-0">
+                <ScrollArea className="h-[340px]">
+                  <div className="p-3 space-y-2">
+                    {notifications.map((notification) => (
+                      <div 
+                        key={notification.id}
+                        className={cn(
+                          "p-3 rounded-xl border transition-all cursor-pointer",
+                          typeStyles[notification.type],
+                          !notification.read && "ring-2 ring-offset-1 ring-primary/30"
+                        )}
+                        onClick={() => markAsRead(notification.id)}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="mt-0.5">
+                            {notification.read ? (
+                              <CheckCheck className="w-3 h-3" />
+                            ) : (
+                              <Circle className="w-3 h-3 fill-current" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            {notification.councilMember && (
+                              <div className="flex items-center gap-1 mb-1">
+                                <span className="text-sm">{notification.councilMember.avatar}</span>
+                                <span className="text-[10px] text-muted-foreground">{notification.councilMember.name}</span>
+                              </div>
+                            )}
+                            <p className={cn("text-xs", !notification.read && "font-medium")}>
+                              {notification.content}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] opacity-70">{toJalali(notification.timestamp)}</span>
+                              <Badge variant="outline" className="text-[10px] h-4">
+                                {typeLabels[notification.type]}
+                              </Badge>
+                            </div>
+                          </div>
+                          {notification.important && (
+                            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0">
+                              <Play className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      )}
     </>
   );
 };
