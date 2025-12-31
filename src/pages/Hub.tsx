@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { Bell, MessageCircle, Archive, Send, Play, CheckCheck, Circle } from "lucide-react";
+import { Bell, MessageCircle, Archive, Send, Play, CheckCheck, Circle, HelpCircle, ThumbsUp, ThumbsDown, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { toJalali, persianNumbers } from "@/lib/jalali";
 
@@ -23,6 +27,23 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+interface InteractiveQuestion {
+  id: string;
+  text: string;
+  type: 'likert' | 'radio' | 'descriptive' | 'yesno' | 'scale';
+  options?: string[];
+  answered: boolean;
+  answer?: string | number;
+  category: string;
+}
+
+interface DailyPodcast {
+  id: string;
+  title: string;
+  duration: string;
+  played: boolean;
+}
+
 const mockNotifications: Notification[] = [
   { id: '1', content: 'وظیفه «تکمیل گزارش» به تأخیر افتاده است. پیشنهاد: زمان‌بندی مجدد', type: 'warning', read: false, important: true, timestamp: new Date() },
   { id: '2', content: 'هدف «یادگیری React» به ۸۰٪ پیشرفت رسید. آفرین!', type: 'success', read: false, important: false, timestamp: new Date() },
@@ -36,6 +57,52 @@ const mockChat: ChatMessage[] = [
   { id: '3', content: 'بر اساس تحلیل رفتار شما، به نظر می‌رسد این وظیفه با چند هدف دیگر در تضاد زمانی است. پیشنهاد می‌کنم آن را به ۳ بخش کوچک‌تر تقسیم کنید.', fromSystem: true, timestamp: new Date() },
 ];
 
+const mockQuestions: InteractiveQuestion[] = [
+  { 
+    id: 'q1', 
+    text: 'چقدر از پیشرفت این هفته خود راضی هستید؟', 
+    type: 'likert', 
+    answered: false,
+    category: 'بازخورد هفتگی'
+  },
+  { 
+    id: 'q2', 
+    text: 'کدام حوزه نیاز به تمرکز بیشتری دارد؟', 
+    type: 'radio',
+    options: ['کار', 'سلامت', 'روابط', 'مالی', 'یادگیری'],
+    answered: false,
+    category: 'اولویت‌بندی'
+  },
+  { 
+    id: 'q3', 
+    text: 'بزرگ‌ترین چالش امروز چه بود؟', 
+    type: 'descriptive', 
+    answered: false,
+    category: 'بازتاب روزانه'
+  },
+  { 
+    id: 'q4', 
+    text: 'آیا به هدف روزانه خود رسیدید؟', 
+    type: 'yesno', 
+    answered: false,
+    category: 'بررسی روزانه'
+  },
+  { 
+    id: 'q5', 
+    text: 'سطح انرژی خود را چگونه ارزیابی می‌کنید؟', 
+    type: 'scale', 
+    answered: false,
+    category: 'وضعیت سلامت'
+  },
+];
+
+const mockPodcast: DailyPodcast = {
+  id: 'p1',
+  title: 'خلاصه فعالیت‌های دیروز و برنامه امروز',
+  duration: '۳:۴۵',
+  played: false,
+};
+
 const typeStyles = {
   info: 'bg-primary/10 border-primary/30 text-primary',
   warning: 'bg-amber-500/10 border-amber-500/30 text-amber-600',
@@ -47,6 +114,10 @@ const Hub = () => {
   const [chat, setChat] = useState<ChatMessage[]>(mockChat);
   const [newMessage, setNewMessage] = useState('');
   const [activeTab, setActiveTab] = useState('notifications');
+  const [questions, setQuestions] = useState<InteractiveQuestion[]>(mockQuestions);
+  const [podcast, setPodcast] = useState<DailyPodcast>(mockPodcast);
+  const [descriptiveAnswer, setDescriptiveAnswer] = useState('');
+  const [scaleValue, setScaleValue] = useState([5]);
 
   const markAsRead = (id: string) => {
     setNotifications(notifications.map(n => 
@@ -65,7 +136,6 @@ const Hub = () => {
     }]);
     setNewMessage('');
     
-    // Simulate system response
     setTimeout(() => {
       setChat(prev => [...prev, {
         id: (Date.now() + 1).toString(),
@@ -76,7 +146,130 @@ const Hub = () => {
     }, 1000);
   };
 
+  const answerQuestion = (questionId: string, answer: string | number) => {
+    setQuestions(questions.map(q => 
+      q.id === questionId ? { ...q, answered: true, answer } : q
+    ));
+  };
+
   const unreadCount = notifications.filter(n => !n.read).length;
+  const unansweredCount = questions.filter(q => !q.answered).length;
+
+  const renderQuestionInput = (question: InteractiveQuestion) => {
+    if (question.answered) {
+      return (
+        <div className="flex items-center gap-2 text-emerald-600">
+          <CheckCheck className="w-4 h-4" />
+          <span className="text-sm">پاسخ داده شده</span>
+        </div>
+      );
+    }
+
+    switch (question.type) {
+      case 'likert':
+        return (
+          <RadioGroup 
+            onValueChange={(v) => answerQuestion(question.id, v)}
+            className="flex gap-2 flex-wrap"
+          >
+            {['کاملاً ناراضی', 'ناراضی', 'متوسط', 'راضی', 'کاملاً راضی'].map((label, i) => (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <RadioGroupItem value={String(i + 1)} id={`${question.id}-${i}`} />
+                <Label htmlFor={`${question.id}-${i}`} className="text-xs text-center">{label}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+        );
+      
+      case 'radio':
+        return (
+          <RadioGroup 
+            onValueChange={(v) => answerQuestion(question.id, v)}
+            className="space-y-2"
+          >
+            {question.options?.map((option) => (
+              <div key={option} className="flex items-center gap-2">
+                <RadioGroupItem value={option} id={`${question.id}-${option}`} />
+                <Label htmlFor={`${question.id}-${option}`}>{option}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+        );
+      
+      case 'descriptive':
+        return (
+          <div className="space-y-2">
+            <Textarea 
+              placeholder="پاسخ خود را بنویسید..."
+              value={descriptiveAnswer}
+              onChange={(e) => setDescriptiveAnswer(e.target.value)}
+              className="min-h-[100px]"
+            />
+            <Button 
+              size="sm" 
+              onClick={() => {
+                if (descriptiveAnswer.trim()) {
+                  answerQuestion(question.id, descriptiveAnswer);
+                  setDescriptiveAnswer('');
+                }
+              }}
+            >
+              ثبت پاسخ
+            </Button>
+          </div>
+        );
+      
+      case 'yesno':
+        return (
+          <div className="flex gap-4">
+            <Button 
+              variant="outline" 
+              className="gap-2 flex-1"
+              onClick={() => answerQuestion(question.id, 'yes')}
+            >
+              <ThumbsUp className="w-4 h-4" />
+              بله
+            </Button>
+            <Button 
+              variant="outline" 
+              className="gap-2 flex-1"
+              onClick={() => answerQuestion(question.id, 'no')}
+            >
+              <ThumbsDown className="w-4 h-4" />
+              خیر
+            </Button>
+          </div>
+        );
+      
+      case 'scale':
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>پایین</span>
+              <span className="font-bold text-lg text-primary">{persianNumbers(scaleValue[0])}</span>
+              <span>بالا</span>
+            </div>
+            <Slider
+              value={scaleValue}
+              onValueChange={setScaleValue}
+              max={10}
+              min={1}
+              step={1}
+              className="w-full"
+            />
+            <Button 
+              size="sm" 
+              onClick={() => answerQuestion(question.id, scaleValue[0])}
+            >
+              ثبت
+            </Button>
+          </div>
+        );
+      
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -85,14 +278,48 @@ const Hub = () => {
         <p className="text-muted-foreground mt-1">مرکز اعلان‌ها، پیام‌ها و ارتباط با سیستم</p>
       </div>
 
+      {/* Daily Podcast Section */}
+      <div className="bg-gradient-to-l from-primary/10 to-primary/5 rounded-xl p-5 border border-primary/20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+              <Mic className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold">پادکست روزانه</h3>
+              <p className="text-sm text-muted-foreground">{podcast.title}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">{podcast.duration}</span>
+            <Button 
+              size="icon" 
+              className="rounded-full h-10 w-10"
+              onClick={() => setPodcast({ ...podcast, played: true })}
+            >
+              <Play className="w-5 h-5" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="notifications" className="gap-2">
             <Bell className="w-4 h-4" />
             اعلان‌ها
             {unreadCount > 0 && (
               <Badge variant="destructive" className="h-5 w-5 p-0 flex items-center justify-center text-xs">
                 {persianNumbers(unreadCount)}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="questions" className="gap-2">
+            <HelpCircle className="w-4 h-4" />
+            سوالات
+            {unansweredCount > 0 && (
+              <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center text-xs">
+                {persianNumbers(unansweredCount)}
               </Badge>
             )}
           </TabsTrigger>
@@ -143,6 +370,31 @@ const Hub = () => {
                     </Button>
                   )}
                 </div>
+              </div>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="questions" className="mt-6">
+          <div className="space-y-4">
+            {questions.map((question) => (
+              <div 
+                key={question.id}
+                className={cn(
+                  "bg-card rounded-xl p-5 border border-border",
+                  question.answered && "opacity-60"
+                )}
+              >
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <HelpCircle className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <Badge variant="outline" className="mb-2 text-xs">{question.category}</Badge>
+                    <p className="font-medium">{question.text}</p>
+                  </div>
+                </div>
+                {renderQuestionInput(question)}
               </div>
             ))}
           </div>
