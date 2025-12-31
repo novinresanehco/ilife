@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
+import { FloatingChatBox } from "@/components/FloatingChatBox";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -12,6 +13,7 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
       <main className="mr-64 p-6 min-h-screen">
         {children}
       </main>
+      <FloatingChatBox />
     </div>
   );
 };
