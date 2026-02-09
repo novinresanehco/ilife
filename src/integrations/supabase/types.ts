@@ -14,7 +14,705 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      behavior_events: {
+        Row: {
+          chain_impact: number | null
+          created_at: string | null
+          event_data: Json | null
+          event_type: string
+          id: string
+          importance: number | null
+          page_context: string | null
+          session_id: string | null
+          user_id: string
+        }
+        Insert: {
+          chain_impact?: number | null
+          created_at?: string | null
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          importance?: number | null
+          page_context?: string | null
+          session_id?: string | null
+          user_id: string
+        }
+        Update: {
+          chain_impact?: number | null
+          created_at?: string | null
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          importance?: number | null
+          page_context?: string | null
+          session_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      behavioral_hypotheses: {
+        Row: {
+          confidence: number | null
+          council_member: string | null
+          created_at: string | null
+          evidence: Json | null
+          id: string
+          pattern: string
+          resolved_at: string | null
+          status: string | null
+          suggested_action: string | null
+          user_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          council_member?: string | null
+          created_at?: string | null
+          evidence?: Json | null
+          id?: string
+          pattern: string
+          resolved_at?: string | null
+          status?: string | null
+          suggested_action?: string | null
+          user_id: string
+        }
+        Update: {
+          confidence?: number | null
+          council_member?: string | null
+          created_at?: string | null
+          evidence?: Json | null
+          id?: string
+          pattern?: string
+          resolved_at?: string | null
+          status?: string | null
+          suggested_action?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      calendar_events: {
+        Row: {
+          all_day: boolean | null
+          color: string | null
+          created_at: string | null
+          description: string | null
+          end_time: string
+          id: string
+          linked_goal_id: string | null
+          linked_task_id: string | null
+          recurrence_rule: string | null
+          start_time: string
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          all_day?: boolean | null
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          end_time: string
+          id?: string
+          linked_goal_id?: string | null
+          linked_task_id?: string | null
+          recurrence_rule?: string | null
+          start_time: string
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          all_day?: boolean | null
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          end_time?: string
+          id?: string
+          linked_goal_id?: string | null
+          linked_task_id?: string | null
+          recurrence_rule?: string | null
+          start_time?: string
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_linked_goal_id_fkey"
+            columns: ["linked_goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_linked_task_id_fkey"
+            columns: ["linked_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          content: string
+          council_member: string | null
+          created_at: string | null
+          from_system: boolean | null
+          has_voice: boolean | null
+          id: string
+          importance: number | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          council_member?: string | null
+          created_at?: string | null
+          from_system?: boolean | null
+          has_voice?: boolean | null
+          id?: string
+          importance?: number | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          council_member?: string | null
+          created_at?: string | null
+          from_system?: boolean | null
+          has_voice?: boolean | null
+          id?: string
+          importance?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      contextual_questions: {
+        Row: {
+          answer: string | null
+          answered_at: string | null
+          category: string | null
+          context_page: string | null
+          council_member: string | null
+          created_at: string | null
+          id: string
+          options: Json | null
+          question_text: string
+          question_type: string
+          skipped: boolean | null
+          trigger_condition: Json | null
+          user_id: string
+        }
+        Insert: {
+          answer?: string | null
+          answered_at?: string | null
+          category?: string | null
+          context_page?: string | null
+          council_member?: string | null
+          created_at?: string | null
+          id?: string
+          options?: Json | null
+          question_text: string
+          question_type: string
+          skipped?: boolean | null
+          trigger_condition?: Json | null
+          user_id: string
+        }
+        Update: {
+          answer?: string | null
+          answered_at?: string | null
+          category?: string | null
+          context_page?: string | null
+          council_member?: string | null
+          created_at?: string | null
+          id?: string
+          options?: Json | null
+          question_text?: string
+          question_type?: string
+          skipped?: boolean | null
+          trigger_condition?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      goals: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          goal_type: string | null
+          hierarchy_level: number | null
+          id: string
+          parent_id: string | null
+          priority: number | null
+          progress: number | null
+          status: string | null
+          target_date: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          goal_type?: string | null
+          hierarchy_level?: number | null
+          id?: string
+          parent_id?: string | null
+          priority?: number | null
+          progress?: number | null
+          status?: string | null
+          target_date?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          goal_type?: string | null
+          hierarchy_level?: number | null
+          id?: string
+          parent_id?: string | null
+          priority?: number | null
+          progress?: number | null
+          status?: string | null
+          target_date?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ideas: {
+        Row: {
+          category: string | null
+          content: string
+          created_at: string | null
+          id: string
+          linked_goal_id: string | null
+          status: string | null
+          tags: string[] | null
+          title: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          content: string
+          created_at?: string | null
+          id?: string
+          linked_goal_id?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          linked_goal_id?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ideas_linked_goal_id_fkey"
+            columns: ["linked_goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nudges: {
+        Row: {
+          action_data: Json | null
+          action_type: string | null
+          auto_open: boolean | null
+          content: string
+          council_member: string | null
+          created_at: string | null
+          dismissed_at: string | null
+          id: string
+          importance: number | null
+          nudge_type: string
+          read_at: string | null
+          related_goal_id: string | null
+          related_task_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action_data?: Json | null
+          action_type?: string | null
+          auto_open?: boolean | null
+          content: string
+          council_member?: string | null
+          created_at?: string | null
+          dismissed_at?: string | null
+          id?: string
+          importance?: number | null
+          nudge_type: string
+          read_at?: string | null
+          related_goal_id?: string | null
+          related_task_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action_data?: Json | null
+          action_type?: string | null
+          auto_open?: boolean | null
+          content?: string
+          council_member?: string | null
+          created_at?: string | null
+          dismissed_at?: string | null
+          id?: string
+          importance?: number | null
+          nudge_type?: string
+          read_at?: string | null
+          related_goal_id?: string | null
+          related_task_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nudges_related_goal_id_fkey"
+            columns: ["related_goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nudges_related_task_id_fkey"
+            columns: ["related_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      perception_models: {
+        Row: {
+          agreeableness: number | null
+          confidence_score: number | null
+          conscientiousness: number | null
+          consistency: number | null
+          created_at: string | null
+          energy_level: number | null
+          extraversion: number | null
+          id: string
+          last_analysis_at: string | null
+          motivation: number | null
+          neuroticism: number | null
+          openness: number | null
+          overwhelm: number | null
+          perfectionism: number | null
+          procrastination: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          agreeableness?: number | null
+          confidence_score?: number | null
+          conscientiousness?: number | null
+          consistency?: number | null
+          created_at?: string | null
+          energy_level?: number | null
+          extraversion?: number | null
+          id?: string
+          last_analysis_at?: string | null
+          motivation?: number | null
+          neuroticism?: number | null
+          openness?: number | null
+          overwhelm?: number | null
+          perfectionism?: number | null
+          procrastination?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          agreeableness?: number | null
+          confidence_score?: number | null
+          conscientiousness?: number | null
+          consistency?: number | null
+          created_at?: string | null
+          energy_level?: number | null
+          extraversion?: number | null
+          id?: string
+          last_analysis_at?: string | null
+          motivation?: number | null
+          neuroticism?: number | null
+          openness?: number | null
+          overwhelm?: number | null
+          perfectionism?: number | null
+          procrastination?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      personality_answers: {
+        Row: {
+          answer_type: string
+          answer_value: string
+          confidence: number | null
+          created_at: string | null
+          id: string
+          question_id: string
+          source: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          answer_type: string
+          answer_value: string
+          confidence?: number | null
+          created_at?: string | null
+          id?: string
+          question_id: string
+          source?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          answer_type?: string
+          answer_value?: string
+          confidence?: number | null
+          created_at?: string | null
+          id?: string
+          question_id?: string
+          source?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          display_name: string | null
+          id: string
+          language: string | null
+          onboarding_completed: boolean | null
+          role: string | null
+          timezone: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string
+          language?: string | null
+          onboarding_completed?: boolean | null
+          role?: string | null
+          timezone?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string
+          language?: string | null
+          onboarding_completed?: boolean | null
+          role?: string | null
+          timezone?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          end_date: string | null
+          id: string
+          linked_goal_id: string | null
+          milestones: Json | null
+          progress: number | null
+          start_date: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          linked_goal_id?: string | null
+          milestones?: Json | null
+          progress?: number | null
+          start_date?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          linked_goal_id?: string | null
+          milestones?: Json | null
+          progress?: number | null
+          start_date?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_linked_goal_id_fkey"
+            columns: ["linked_goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          actual_minutes: number | null
+          completed_at: string | null
+          created_at: string | null
+          defer_count: number | null
+          description: string | null
+          due_date: string | null
+          due_time: string | null
+          estimated_minutes: number | null
+          goal_id: string | null
+          id: string
+          importance: number | null
+          kanban_column: string | null
+          order_index: number | null
+          parent_task_id: string | null
+          priority: number | null
+          status: string | null
+          subtask_options: Json | null
+          subtask_type: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          actual_minutes?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          defer_count?: number | null
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          estimated_minutes?: number | null
+          goal_id?: string | null
+          id?: string
+          importance?: number | null
+          kanban_column?: string | null
+          order_index?: number | null
+          parent_task_id?: string | null
+          priority?: number | null
+          status?: string | null
+          subtask_options?: Json | null
+          subtask_type?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          actual_minutes?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          defer_count?: number | null
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          estimated_minutes?: number | null
+          goal_id?: string | null
+          id?: string
+          importance?: number | null
+          kanban_column?: string | null
+          order_index?: number | null
+          parent_task_id?: string | null
+          priority?: number | null
+          status?: string | null
+          subtask_options?: Json | null
+          subtask_type?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_sessions: {
+        Row: {
+          created_at: string | null
+          id: string
+          pages_visited: string[] | null
+          productive_minutes: number | null
+          session_end: string | null
+          session_start: string | null
+          total_events: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          pages_visited?: string[] | null
+          productive_minutes?: number | null
+          session_end?: string | null
+          session_start?: string | null
+          total_events?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          pages_visited?: string[] | null
+          productive_minutes?: number | null
+          session_end?: string | null
+          session_start?: string | null
+          total_events?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
