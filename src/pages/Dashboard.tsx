@@ -5,9 +5,37 @@ import { GoalsProgress } from "@/components/dashboard/GoalsProgress";
 import { MiniCalendar } from "@/components/dashboard/MiniCalendar";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { toJalaliWithDay } from "@/lib/jalali";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 const Dashboard = () => {
   const today = new Date();
+  const { user } = useAuthContext();
+
+  const { data: stats } = useQuery({
+    queryKey: ['dashboard_stats', user?.id],
+    queryFn: async () => {
+      if (!user) return { tasks: 0, goals: 0, events: 0, ideas: 0 };
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      const [tasksRes, goalsRes, eventsRes, ideasRes] = await Promise.all([
+        supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('user_id', user.id).in('status', ['todo', 'in_progress']),
+        supabase.from('goals').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'active'),
+        supabase.from('calendar_events').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('ideas').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      ]);
+
+      return {
+        tasks: tasksRes.count ?? 0,
+        goals: goalsRes.count ?? 0,
+        events: eventsRes.count ?? 0,
+        ideas: ideasRes.count ?? 0,
+      };
+    },
+    enabled: !!user,
+  });
   
   return (
     <div className="space-y-6">
@@ -18,28 +46,24 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard 
-          title="وظایف امروز" 
-          value={8} 
+          title="وظایف فعال" 
+          value={stats?.tasks ?? 0} 
           icon={CheckSquare} 
-          trend={12}
         />
         <StatsCard 
           title="اهداف فعال" 
-          value={4} 
+          value={stats?.goals ?? 0} 
           icon={Target} 
-          trend={5}
         />
         <StatsCard 
-          title="رویدادهای هفته" 
-          value={12} 
+          title="رویدادها" 
+          value={stats?.events ?? 0} 
           icon={Calendar} 
-          trend={-3}
         />
         <StatsCard 
-          title="ایده‌های جدید" 
-          value={6} 
+          title="ایده‌ها" 
+          value={stats?.ideas ?? 0} 
           icon={Lightbulb} 
-          trend={25}
         />
       </div>
 
