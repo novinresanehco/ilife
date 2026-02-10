@@ -1,44 +1,15 @@
 import { useState } from "react";
-import { Plus, Search, Lightbulb, Sparkles, Tag } from "lucide-react";
+import { Plus, Search, Lightbulb, Sparkles, Tag, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toJalali } from "@/lib/jalali";
-
-interface Idea {
-  id: string;
-  title: string;
-  content: string;
-  tags: string[];
-  createdAt: Date;
-  expanded?: boolean;
-}
-
-const initialIdeas: Idea[] = [
-  { 
-    id: '1', 
-    title: 'اپلیکیشن مدیریت زمان', 
-    content: 'یک اپلیکیشن هوشمند که بر اساس عادات کاربر، بهترین زمان برای انجام کارها را پیشنهاد دهد. می‌تواند با تقویم یکپارچه شود و یادآورهای هوشمند داشته باشد.', 
-    tags: ['نوآوری', 'تکنولوژی'], 
-    createdAt: new Date('2024-01-15') 
-  },
-  { 
-    id: '2', 
-    title: 'کسب‌وکار آنلاین', 
-    content: 'راه‌اندازی فروشگاه آنلاین محصولات دست‌ساز ایرانی. تمرکز بر صنایع دستی و هنرهای سنتی با بسته‌بندی مدرن.', 
-    tags: ['کسب‌وکار', 'شخصی'], 
-    createdAt: new Date('2024-02-20') 
-  },
-  { 
-    id: '3', 
-    title: 'دوره آموزشی برنامه‌نویسی', 
-    content: 'تهیه یک دوره آموزشی جامع برنامه‌نویسی وب به زبان فارسی. شامل پروژه‌های عملی و پشتیبانی آنلاین.', 
-    tags: ['آموزش', 'تکنولوژی'], 
-    createdAt: new Date('2024-03-10') 
-  },
-];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 const tagColors: Record<string, string> = {
   'نوآوری': 'bg-purple-500/10 text-purple-600',
@@ -49,35 +20,85 @@ const tagColors: Record<string, string> = {
 };
 
 const Ideas = () => {
-  const [ideas, setIdeas] = useState<Idea[]>(initialIdeas);
+  const { user } = useAuthContext();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [newIdea, setNewIdea] = useState({ title: '', content: '', tags: [] as string[] });
 
+  const { data: ideas = [], isLoading } = useQuery({
+    queryKey: ['ideas', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('ideas')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (input: { title: string; content: string; tags: string[] }) => {
+      if (!user) throw new Error('Not authenticated');
+      const { data, error } = await supabase
+        .from('ideas')
+        .insert([{
+          user_id: user.id,
+          title: input.title || null,
+          content: input.content,
+          tags: input.tags.length > 0 ? input.tags : null,
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ideas'] });
+      toast({ title: 'ایده ذخیره شد ✓' });
+    },
+    onError: (error) => {
+      toast({ title: 'خطا', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('ideas').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ideas'] });
+      toast({ title: 'ایده حذف شد' });
+    },
+  });
+
   const filteredIdeas = ideas.filter(idea => 
-    idea.title.includes(searchQuery) || idea.content.includes(searchQuery)
+    (idea.title?.includes(searchQuery) ?? false) || idea.content.includes(searchQuery)
   );
 
-  const toggleExpand = (id: string) => {
-    setIdeas(ideas.map(idea => 
-      idea.id === id ? { ...idea, expanded: !idea.expanded } : idea
-    ));
+  const addIdea = () => {
+    if (!newIdea.content.trim()) return;
+    createMutation.mutate(newIdea, {
+      onSuccess: () => {
+        setNewIdea({ title: '', content: '', tags: [] });
+        setIsAdding(false);
+      }
+    });
   };
 
-  const addIdea = () => {
-    if (!newIdea.title.trim()) return;
-    
-    setIdeas([{
-      id: Date.now().toString(),
-      title: newIdea.title,
-      content: newIdea.content,
-      tags: newIdea.tags,
-      createdAt: new Date(),
-    }, ...ideas]);
-    
-    setNewIdea({ title: '', content: '', tags: [] });
-    setIsAdding(false);
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -143,47 +164,60 @@ const Ideas = () => {
               ))}
             </div>
             <div className="flex gap-2">
-              <Button onClick={addIdea}>ذخیره ایده</Button>
+              <Button onClick={addIdea} disabled={createMutation.isPending}>
+                {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'ذخیره ایده'}
+              </Button>
               <Button variant="outline" onClick={() => setIsAdding(false)}>انصراف</Button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredIdeas.map((idea) => (
-          <div 
-            key={idea.id}
-            className="bg-card rounded-xl p-5 border border-border hover:shadow-md transition-all cursor-pointer"
-            onClick={() => toggleExpand(idea.id)}
-          >
-            <div className="flex items-start gap-3 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <Lightbulb className="w-5 h-5 text-primary" />
+      {filteredIdeas.length === 0 && !isAdding ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Lightbulb className="w-12 h-12 mx-auto mb-4 opacity-30" />
+          <p>هنوز ایده‌ای ثبت نشده است</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredIdeas.map((idea) => (
+            <div 
+              key={idea.id}
+              className="bg-card rounded-xl p-5 border border-border hover:shadow-md transition-all group"
+            >
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <Lightbulb className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold">{idea.title || 'بدون عنوان'}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {idea.created_at ? toJalali(new Date(idea.created_at)) : ''}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => deleteMutation.mutate(idea.id)}
+                  className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-              <div>
-                <h3 className="font-semibold">{idea.title}</h3>
-                <p className="text-xs text-muted-foreground">{toJalali(idea.createdAt)}</p>
+              
+              <p className="text-sm text-muted-foreground mb-3 line-clamp-3">
+                {idea.content}
+              </p>
+              
+              <div className="flex items-center gap-2 flex-wrap">
+                {idea.tags?.map(tag => (
+                  <Badge key={tag} variant="secondary" className={tagColors[tag] || ''}>
+                    {tag}
+                  </Badge>
+                ))}
               </div>
             </div>
-            
-            <p className={cn(
-              "text-sm text-muted-foreground mb-3",
-              !idea.expanded && "line-clamp-3"
-            )}>
-              {idea.content}
-            </p>
-            
-            <div className="flex items-center gap-2 flex-wrap">
-              {idea.tags.map(tag => (
-                <Badge key={tag} variant="secondary" className={tagColors[tag]}>
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

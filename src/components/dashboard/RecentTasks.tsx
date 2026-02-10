@@ -1,74 +1,87 @@
-import { CheckCircle, Circle, Clock } from "lucide-react";
+import { CheckCircle, Circle, Clock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { persianNumbers } from "@/lib/jalali";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthContext } from "@/contexts/AuthContext";
 
-interface Task {
-  id: string;
-  title: string;
-  status: 'todo' | 'in_progress' | 'done';
-  importance: number;
-}
-
-const mockTasks: Task[] = [
-  { id: '1', title: 'تکمیل گزارش پروژه', status: 'in_progress', importance: 85 },
-  { id: '2', title: 'جلسه با تیم توسعه', status: 'done', importance: 70 },
-  { id: '3', title: 'بررسی ایمیل‌های مهم', status: 'todo', importance: 60 },
-  { id: '4', title: 'طراحی رابط کاربری', status: 'in_progress', importance: 90 },
-  { id: '5', title: 'تمرین ورزشی صبح', status: 'done', importance: 50 },
-];
-
-const statusIcons = {
+const statusIcons: Record<string, typeof Circle> = {
   todo: Circle,
   in_progress: Clock,
   done: CheckCircle,
 };
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   todo: 'text-muted-foreground',
   in_progress: 'text-amber-500',
   done: 'text-emerald-500',
 };
 
-const statusLabels = {
+const statusLabels: Record<string, string> = {
   todo: 'در انتظار',
   in_progress: 'در حال انجام',
   done: 'انجام شده',
 };
 
 export const RecentTasks = () => {
+  const { user } = useAuthContext();
+
+  const { data: tasks = [], isLoading } = useQuery({
+    queryKey: ['recent_tasks', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id, title, status, importance')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
   return (
     <div className="bg-card rounded-xl p-5 border border-border">
       <h3 className="font-semibold text-lg mb-4">وظایف اخیر</h3>
-      <div className="space-y-3">
-        {mockTasks.map((task) => {
-          const Icon = statusIcons[task.status];
-          return (
-            <div 
-              key={task.id} 
-              className="flex items-center gap-3 p-3 rounded-lg bg-background/50 hover:bg-accent/50 transition-colors cursor-pointer"
-            >
-              <Icon className={cn("w-5 h-5", statusColors[task.status])} />
-              <div className="flex-1 min-w-0">
-                <p className={cn(
-                  "text-sm font-medium truncate",
-                  task.status === 'done' && "line-through text-muted-foreground"
+      {isLoading ? (
+        <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+      ) : tasks.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-4">وظیفه‌ای ثبت نشده</p>
+      ) : (
+        <div className="space-y-3">
+          {tasks.map((task) => {
+            const status = task.status ?? 'todo';
+            const Icon = statusIcons[status] ?? Circle;
+            return (
+              <div 
+                key={task.id} 
+                className="flex items-center gap-3 p-3 rounded-lg bg-background/50 hover:bg-accent/50 transition-colors cursor-pointer"
+              >
+                <Icon className={cn("w-5 h-5", statusColors[status])} />
+                <div className="flex-1 min-w-0">
+                  <p className={cn(
+                    "text-sm font-medium truncate",
+                    status === 'done' && "line-through text-muted-foreground"
+                  )}>
+                    {task.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{statusLabels[status]}</p>
+                </div>
+                <div className={cn(
+                  "px-2 py-1 rounded-md text-xs font-medium",
+                  (task.importance ?? 50) >= 80 ? "bg-destructive/10 text-destructive" :
+                  (task.importance ?? 50) >= 50 ? "bg-amber-500/10 text-amber-600" :
+                  "bg-emerald-500/10 text-emerald-600"
                 )}>
-                  {task.title}
-                </p>
-                <p className="text-xs text-muted-foreground">{statusLabels[task.status]}</p>
+                  {persianNumbers(task.importance ?? 50)}%
+                </div>
               </div>
-              <div className={cn(
-                "px-2 py-1 rounded-md text-xs font-medium",
-                task.importance >= 80 ? "bg-destructive/10 text-destructive" :
-                task.importance >= 50 ? "bg-amber-500/10 text-amber-600" :
-                "bg-emerald-500/10 text-emerald-600"
-              )}>
-                {persianNumbers(task.importance)}%
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
