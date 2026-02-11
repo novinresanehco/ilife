@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { 
   MessageCircle, X, Send, Bell, HelpCircle, 
-  ChevronDown, Play, ThumbsUp, ThumbsDown,
-  CheckCheck, Circle, Users, AlertTriangle, Sparkles
+  ChevronDown, Play, Pause, ThumbsUp, ThumbsDown,
+  CheckCheck, Circle, Users, AlertTriangle, Sparkles, Volume2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,8 @@ import {
   getUnansweredQuestions, savePersonalityAnswer,
   getQuizCompletion, type PersonalityQuestion 
 } from "@/lib/personalityQuiz";
+import { useCouncilChat } from "@/hooks/useCouncilChat";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 
 // Using allCouncilMembers from councilOfGeniuses.ts instead of local definition
 
@@ -152,56 +154,30 @@ export const FloatingChatBox = () => {
   const [activeTab, setActiveTab] = useState('chat');
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [questions, setQuestions] = useState<InteractiveQuestion[]>(mockQuestions);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { 
-      id: '1', 
-      content: 'سلام! من شورای هوشمند LifeOS هستم. ۱۰ متخصص اینجا هستیم تا شما را در مسیر موفقیت همراهی کنیم. چطور می‌تونم کمکتون کنم؟', 
-      fromSystem: true, 
-      timestamp: new Date(),
-      councilMember: councilMembers[1]
-    },
-  ]);
   const [newMessage, setNewMessage] = useState('');
   const [scaleValue, setScaleValue] = useState([5]);
   const [descriptiveAnswer, setDescriptiveAnswer] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // AI Chat hook
+  const { messages: aiMessages, isLoading: aiLoading, sendMessage: sendAIMessage } = useCouncilChat();
+  
+  // TTS hook
+  const { speak, stop, isSpeaking, isLoading: ttsLoading } = useTextToSpeech();
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
   const unansweredQuestions = questions.filter(q => !q.answered).length;
   const totalBadge = unreadNotifications + unansweredQuestions;
 
-  // Auto-open for important notifications (simulation)
+  // Auto-scroll chat
   useEffect(() => {
-    const importantUnread = notifications.some(n => n.important && !n.read);
-    if (importantUnread && !isOpen) {
-      // Would auto-open for importance >= 80
-      // setIsOpen(true);
-    }
-  }, [notifications, isOpen]);
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [aiMessages]);
 
   const sendMessage = () => {
-    if (!newMessage.trim()) return;
-    
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      content: newMessage,
-      fromSystem: false,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMsg]);
+    if (!newMessage.trim() || aiLoading) return;
+    sendAIMessage(newMessage);
     setNewMessage('');
-    
-    // Simulate council response
-    setTimeout(() => {
-      const relevantMember = councilMembers[Math.floor(Math.random() * 5)]; // Pick from fixed members
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        content: `بر اساس تحلیل من به عنوان ${relevantMember.role}، به نظر می‌رسد این موضوع به ${relevantMember.expertise[0]} مربوط است. پیشنهاد می‌کنم...`,
-        fromSystem: true,
-        timestamp: new Date(),
-        councilMember: relevantMember,
-        importance: 70,
-      }]);
-    }, 1000);
   };
 
   const markAsRead = (id: string) => {
@@ -413,36 +389,52 @@ export const FloatingChatBox = () => {
               <TabsContent value="chat" className="m-0">
                 <ScrollArea className="h-[300px]">
                   <div className="p-3 space-y-3">
-                    {messages.map((message) => (
+                    {aiMessages.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Users className="w-8 h-8 mx-auto mb-2" />
+                        <p className="text-xs">سوال خود را بپرسید تا شورای نوابغ پاسخ دهد</p>
+                      </div>
+                    )}
+                    {aiMessages.map((message, idx) => (
                       <div 
-                        key={message.id}
+                        key={idx}
                         className={cn(
                           "flex",
-                          message.fromSystem ? "justify-start" : "justify-end"
+                          message.role === 'assistant' ? "justify-start" : "justify-end"
                         )}
                       >
                         <div className={cn(
                           "max-w-[85%] p-3 rounded-2xl",
-                          message.fromSystem 
+                          message.role === 'assistant' 
                             ? "bg-accent text-accent-foreground rounded-tr-sm" 
                             : "bg-primary text-primary-foreground rounded-tl-sm"
                         )}>
-                          {message.councilMember && message.fromSystem && (
-                            <div className="flex items-center gap-2 mb-1 pb-1 border-b border-border/30">
-                              <span className="text-lg">{message.councilMember.avatar}</span>
-                              <span className="text-xs font-medium">{message.councilMember.name}</span>
-                            </div>
+                          <p className="text-xs leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                          {message.role === 'assistant' && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-5 w-5 mt-1"
+                              onClick={() => isSpeaking ? stop() : speak(message.content)}
+                            >
+                              {isSpeaking ? <Pause className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                            </Button>
                           )}
-                          <p className="text-xs leading-relaxed">{message.content}</p>
-                          <p className={cn(
-                            "text-[10px] mt-1",
-                            message.fromSystem ? "text-muted-foreground" : "text-primary-foreground/70"
-                          )}>
-                            {toJalali(message.timestamp)}
-                          </p>
                         </div>
                       </div>
                     ))}
+                    {aiLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-accent text-accent-foreground p-3 rounded-2xl rounded-tr-sm">
+                          <div className="flex gap-1">
+                            <span className="animate-bounce text-xs">●</span>
+                            <span className="animate-bounce text-xs" style={{ animationDelay: '0.1s' }}>●</span>
+                            <span className="animate-bounce text-xs" style={{ animationDelay: '0.2s' }}>●</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
                   </div>
                 </ScrollArea>
                 <div className="p-3 border-t border-border">
@@ -453,8 +445,9 @@ export const FloatingChatBox = () => {
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
                       className="text-xs h-9"
+                      disabled={aiLoading}
                     />
-                    <Button onClick={sendMessage} size="icon" className="h-9 w-9 shrink-0">
+                    <Button onClick={sendMessage} size="icon" className="h-9 w-9 shrink-0" disabled={aiLoading}>
                       <Send className="w-4 h-4" />
                     </Button>
                   </div>

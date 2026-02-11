@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Bell, MessageCircle, Archive, Send, Play, CheckCheck, Circle, HelpCircle, ThumbsUp, ThumbsDown, Mic } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Bell, MessageCircle, Archive, Send, Play, Pause, CheckCheck, Circle, HelpCircle, ThumbsUp, ThumbsDown, Mic, Volume2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { toJalali, persianNumbers } from "@/lib/jalali";
+import { useCouncilChat } from "@/hooks/useCouncilChat";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { usePodcast } from "@/hooks/usePodcast";
 
 interface Notification {
   id: string;
@@ -37,71 +40,12 @@ interface InteractiveQuestion {
   category: string;
 }
 
-interface DailyPodcast {
-  id: string;
-  title: string;
-  duration: string;
-  played: boolean;
-}
-
+// Mock notifications (will be replaced by nudges from DB later)
 const mockNotifications: Notification[] = [
   { id: '1', content: 'وظیفه «تکمیل گزارش» به تأخیر افتاده است. پیشنهاد: زمان‌بندی مجدد', type: 'warning', read: false, important: true, timestamp: new Date() },
   { id: '2', content: 'هدف «یادگیری React» به ۸۰٪ پیشرفت رسید. آفرین!', type: 'success', read: false, important: false, timestamp: new Date() },
   { id: '3', content: 'جلسه تیم در ۳۰ دقیقه آینده شروع می‌شود', type: 'info', read: true, important: true, timestamp: new Date() },
-  { id: '4', content: 'پادکست روزانه آماده شد. گوش دهید!', type: 'info', read: true, important: false, timestamp: new Date() },
 ];
-
-const mockChat: ChatMessage[] = [
-  { id: '1', content: 'سلام! من دستیار شخصی شما هستم. چطور می‌تونم کمکتون کنم؟', fromSystem: true, timestamp: new Date() },
-  { id: '2', content: 'چرا وظیفه گزارش به تأخیر افتاده؟', fromSystem: false, timestamp: new Date() },
-  { id: '3', content: 'بر اساس تحلیل رفتار شما، به نظر می‌رسد این وظیفه با چند هدف دیگر در تضاد زمانی است. پیشنهاد می‌کنم آن را به ۳ بخش کوچک‌تر تقسیم کنید.', fromSystem: true, timestamp: new Date() },
-];
-
-const mockQuestions: InteractiveQuestion[] = [
-  { 
-    id: 'q1', 
-    text: 'چقدر از پیشرفت این هفته خود راضی هستید؟', 
-    type: 'likert', 
-    answered: false,
-    category: 'بازخورد هفتگی'
-  },
-  { 
-    id: 'q2', 
-    text: 'کدام حوزه نیاز به تمرکز بیشتری دارد؟', 
-    type: 'radio',
-    options: ['کار', 'سلامت', 'روابط', 'مالی', 'یادگیری'],
-    answered: false,
-    category: 'اولویت‌بندی'
-  },
-  { 
-    id: 'q3', 
-    text: 'بزرگ‌ترین چالش امروز چه بود؟', 
-    type: 'descriptive', 
-    answered: false,
-    category: 'بازتاب روزانه'
-  },
-  { 
-    id: 'q4', 
-    text: 'آیا به هدف روزانه خود رسیدید؟', 
-    type: 'yesno', 
-    answered: false,
-    category: 'بررسی روزانه'
-  },
-  { 
-    id: 'q5', 
-    text: 'سطح انرژی خود را چگونه ارزیابی می‌کنید؟', 
-    type: 'scale', 
-    answered: false,
-    category: 'وضعیت سلامت'
-  },
-];
-
-const mockPodcast: DailyPodcast = {
-  id: 'p1',
-  title: 'خلاصه فعالیت‌های دیروز و برنامه امروز',
-  duration: '۳:۴۵',
-  played: false,
-};
 
 const typeStyles = {
   info: 'bg-primary/10 border-primary/30 text-primary',
@@ -109,15 +53,32 @@ const typeStyles = {
   success: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600',
 };
 
+const defaultQuestions: InteractiveQuestion[] = [
+  { id: 'q1', text: 'چقدر از پیشرفت این هفته خود راضی هستید؟', type: 'likert', answered: false, category: 'بازخورد هفتگی' },
+  { id: 'q2', text: 'کدام حوزه نیاز به تمرکز بیشتری دارد؟', type: 'radio', options: ['کار', 'سلامت', 'روابط', 'مالی', 'یادگیری'], answered: false, category: 'اولویت‌بندی' },
+  { id: 'q3', text: 'بزرگ‌ترین چالش امروز چه بود؟', type: 'descriptive', answered: false, category: 'بازتاب روزانه' },
+  { id: 'q4', text: 'آیا به هدف روزانه خود رسیدید؟', type: 'yesno', answered: false, category: 'بررسی روزانه' },
+  { id: 'q5', text: 'سطح انرژی خود را چگونه ارزیابی می‌کنید؟', type: 'scale', answered: false, category: 'وضعیت سلامت' },
+];
+
 const Hub = () => {
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
-  const [chat, setChat] = useState<ChatMessage[]>(mockChat);
   const [newMessage, setNewMessage] = useState('');
   const [activeTab, setActiveTab] = useState('notifications');
-  const [questions, setQuestions] = useState<InteractiveQuestion[]>(mockQuestions);
-  const [podcast, setPodcast] = useState<DailyPodcast>(mockPodcast);
+  const [questions, setQuestions] = useState<InteractiveQuestion[]>(defaultQuestions);
   const [descriptiveAnswer, setDescriptiveAnswer] = useState('');
   const [scaleValue, setScaleValue] = useState([5]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // AI hooks
+  const { messages: aiMessages, isLoading: aiLoading, sendMessage: sendAIMessage } = useCouncilChat();
+  const { speak, stop, isSpeaking, isLoading: ttsLoading } = useTextToSpeech();
+  const { podcastText, isGenerating: podcastGenerating, generatePodcast } = usePodcast();
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [aiMessages]);
 
   const markAsRead = (id: string) => {
     setNotifications(notifications.map(n => 
@@ -126,24 +87,22 @@ const Hub = () => {
   };
 
   const sendMessage = () => {
-    if (!newMessage.trim()) return;
-    
-    setChat([...chat, {
-      id: Date.now().toString(),
-      content: newMessage,
-      fromSystem: false,
-      timestamp: new Date(),
-    }]);
+    if (!newMessage.trim() || aiLoading) return;
+    sendAIMessage(newMessage);
     setNewMessage('');
-    
-    setTimeout(() => {
-      setChat(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        content: 'متوجه شدم. در حال تحلیل درخواست شما هستم...',
-        fromSystem: true,
-        timestamp: new Date(),
-      }]);
-    }, 1000);
+  };
+
+  const handlePodcastPlay = async () => {
+    if (podcastText) {
+      if (isSpeaking) {
+        stop();
+      } else {
+        speak(podcastText);
+      }
+    } else {
+      const text = await generatePodcast();
+      if (text) speak(text);
+    }
   };
 
   const answerQuestion = (questionId: string, answer: string | number) => {
@@ -287,20 +246,33 @@ const Hub = () => {
             </div>
             <div>
               <h3 className="font-semibold">پادکست روزانه</h3>
-              <p className="text-sm text-muted-foreground">{podcast.title}</p>
+              <p className="text-sm text-muted-foreground">
+                {podcastText ? 'پادکست آماده پخش است' : 'خلاصه فعالیت‌ها و برنامه امروز'}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">{podcast.duration}</span>
             <Button 
               size="icon" 
               className="rounded-full h-10 w-10"
-              onClick={() => setPodcast({ ...podcast, played: true })}
+              onClick={handlePodcastPlay}
+              disabled={podcastGenerating || ttsLoading}
             >
-              <Play className="w-5 h-5" />
+              {podcastGenerating || ttsLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : isSpeaking ? (
+                <Pause className="w-5 h-5" />
+              ) : (
+                <Play className="w-5 h-5" />
+              )}
             </Button>
           </div>
         </div>
+        {podcastText && (
+          <div className="mt-3 pt-3 border-t border-primary/10">
+            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap line-clamp-3">{podcastText}</p>
+          </div>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -325,7 +297,7 @@ const Hub = () => {
           </TabsTrigger>
           <TabsTrigger value="chat" className="gap-2">
             <MessageCircle className="w-4 h-4" />
-            گفتگو
+            گفتگو با شورا
           </TabsTrigger>
           <TabsTrigger value="archive" className="gap-2">
             <Archive className="w-4 h-4" />
@@ -365,8 +337,13 @@ const Hub = () => {
                     </div>
                   </div>
                   {notification.important && (
-                    <Button size="sm" variant="ghost" className="shrink-0">
-                      <Play className="w-4 h-4" />
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="shrink-0"
+                      onClick={(e) => { e.stopPropagation(); speak(notification.content); }}
+                    >
+                      <Volume2 className="w-4 h-4" />
                     </Button>
                   )}
                 </div>
@@ -403,40 +380,64 @@ const Hub = () => {
         <TabsContent value="chat" className="mt-6">
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             <div className="h-[400px] overflow-y-auto p-4 space-y-4">
-              {chat.map((message) => (
+              {aiMessages.length === 0 && (
+                <div className="text-center py-16 text-muted-foreground">
+                  <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>سوال خود را بپرسید تا شورای نوابغ پاسخ دهد</p>
+                  <p className="text-xs mt-1">۱۰ متخصص آماده کمک به شما هستند</p>
+                </div>
+              )}
+              {aiMessages.map((message, idx) => (
                 <div 
-                  key={message.id}
+                  key={idx}
                   className={cn(
                     "flex",
-                    message.fromSystem ? "justify-start" : "justify-end"
+                    message.role === 'assistant' ? "justify-start" : "justify-end"
                   )}
                 >
                   <div className={cn(
                     "max-w-[80%] p-3 rounded-2xl",
-                    message.fromSystem 
+                    message.role === 'assistant' 
                       ? "bg-accent text-accent-foreground rounded-tr-sm" 
                       : "bg-primary text-primary-foreground rounded-tl-sm"
                   )}>
-                    <p className="text-sm">{message.content}</p>
-                    <p className={cn(
-                      "text-xs mt-1",
-                      message.fromSystem ? "text-muted-foreground" : "text-primary-foreground/70"
-                    )}>
-                      {toJalali(message.timestamp)}
-                    </p>
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {message.role === 'assistant' && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 mt-1"
+                        onClick={() => isSpeaking ? stop() : speak(message.content)}
+                      >
+                        {isSpeaking ? <Pause className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
+              {aiLoading && aiMessages[aiMessages.length - 1]?.role !== 'assistant' && (
+                <div className="flex justify-start">
+                  <div className="bg-accent p-3 rounded-2xl rounded-tr-sm">
+                    <div className="flex gap-1">
+                      <span className="animate-bounce text-sm">●</span>
+                      <span className="animate-bounce text-sm" style={{ animationDelay: '0.1s' }}>●</span>
+                      <span className="animate-bounce text-sm" style={{ animationDelay: '0.2s' }}>●</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
             </div>
             <div className="p-4 border-t border-border">
               <div className="flex gap-2">
                 <Input 
-                  placeholder="پیام خود را بنویسید..." 
+                  placeholder="سوال خود را از شورای نوابغ بپرسید..." 
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                  disabled={aiLoading}
                 />
-                <Button onClick={sendMessage}>
+                <Button onClick={sendMessage} disabled={aiLoading}>
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
