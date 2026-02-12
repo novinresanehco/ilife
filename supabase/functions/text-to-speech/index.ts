@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { makeAIRequest, getUserFromAuth } from "../_shared/ai-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,8 +11,7 @@ serve(async (req) => {
 
   try {
     const { text, voice } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const userId = await getUserFromAuth(req.headers.get("Authorization"));
 
     if (!text || text.trim().length === 0) {
       return new Response(JSON.stringify({ error: "متنی ارائه نشده" }), {
@@ -20,42 +19,39 @@ serve(async (req) => {
       });
     }
 
-    // Use Gemini's TTS capabilities via the AI gateway
-    // We generate speech by asking Gemini to produce audio-compatible output
-    // Since Lovable AI gateway supports Gemini models, we use the multimodal approach
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `You are a text processor. Return the input text exactly as-is, cleaned and ready for speech synthesis. Remove any markdown formatting but keep the Persian text natural. Output ONLY the cleaned text, nothing else.`
-          },
-          { role: "user", content: text }
-        ],
-      }),
-    });
+    // Clean and prepare text for TTS using AI
+    const response = await makeAIRequest({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        {
+          role: "system",
+          content: `You are a text processor for Persian text-to-speech. Your job:
+1. Remove all markdown formatting (**, ##, *, etc.)
+2. Remove emojis
+3. Convert numbered/bulleted lists into flowing sentences
+4. Keep the Persian text natural and conversational
+5. Add appropriate pauses with commas and periods
+6. Output ONLY the cleaned text, nothing else.`
+        },
+        { role: "user", content: text }
+      ],
+    }, userId);
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "محدودیت درخواست. لطفاً چند لحظه صبر کنید." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const errText = await response.text();
+      try {
+        const parsed = JSON.parse(errText);
+        return new Response(JSON.stringify({ error: parsed.error || "خطا در پردازش متن" }), {
+          status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      } catch {
+        throw new Error(`AI error: ${response.status}`);
       }
-      throw new Error(`AI error: ${response.status}`);
     }
 
     const data = await response.json();
     const cleanedText = data.choices?.[0]?.message?.content || text;
 
-    // Use Web Speech API on client side - return cleaned text for client TTS
-    // Since Lovable AI gateway doesn't have native audio generation,
-    // we return the cleaned/processed text for browser's SpeechSynthesis API
     return new Response(JSON.stringify({ 
       text: cleanedText,
       voice: voice || "fa-IR",

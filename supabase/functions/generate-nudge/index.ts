@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { makeAIRequest, getUserFromAuth, getSupabaseAdmin } from "../_shared/ai-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,35 +16,21 @@ const nudgeSystemPrompt = `تو سیستم نادج (Nudge) هوشمند LifeOS 
 - به فارسی بنویس
 - هر پیام حداکثر ۲ جمله
 - عملی و مشخص باش
-- از اموجی استفاده کن
-- خروجی JSON با فرمت: {"nudges": [{"type": "pursuit|supervision|guidance", "content": "...", "importance": 1-100, "council_member": "member_id"}]}`;
+- از اموجی استفاده کن`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
-    const authHeader = req.headers.get("Authorization");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    let userId: string | null = null;
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      userId = user?.id || null;
-    }
-
+    const userId = await getUserFromAuth(req.headers.get("Authorization"));
     if (!userId) {
       return new Response(JSON.stringify({ error: "احراز هویت الزامی است" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Gather user data
+    const supabase = getSupabaseAdmin();
+
     const [tasksRes, goalsRes, perceptionRes] = await Promise.all([
       supabase.from("tasks").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(15),
       supabase.from("goals").select("*").eq("user_id", userId).limit(10),
@@ -60,65 +46,65 @@ serve(async (req) => {
 اهداف کم‌پیشرفت: ${staleGoals.map(g => `${g.title} (${g.progress}%)`).join("، ") || "ندارد"}
 تعلل: ${perception?.procrastination || 50}%، انرژی: ${perception?.energy_level || 50}%، انگیزه: ${perception?.motivation || 50}%`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: nudgeSystemPrompt },
-          { role: "user", content: `بر اساس اطلاعات زیر، ۲-۳ نادج هوشمند تولید کن:\n${userContext}` },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "create_nudges",
-            description: "Create smart nudge notifications",
-            parameters: {
-              type: "object",
-              properties: {
-                nudges: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      type: { type: "string", enum: ["pursuit", "supervision", "guidance"] },
-                      content: { type: "string" },
-                      importance: { type: "number" },
-                      council_member: { type: "string" }
-                    },
-                    required: ["type", "content", "importance", "council_member"],
-                    additionalProperties: false
-                  }
+    const response = await makeAIRequest({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: nudgeSystemPrompt },
+        { role: "user", content: `بر اساس اطلاعات زیر، ۲-۳ نادج هوشمند تولید کن:\n${userContext}` },
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "create_nudges",
+          description: "Create smart nudge notifications",
+          parameters: {
+            type: "object",
+            properties: {
+              nudges: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    type: { type: "string", enum: ["pursuit", "supervision", "guidance"] },
+                    content: { type: "string" },
+                    importance: { type: "number" },
+                    council_member: { type: "string" }
+                  },
+                  required: ["type", "content", "importance", "council_member"],
+                  additionalProperties: false
                 }
-              },
-              required: ["nudges"],
-              additionalProperties: false
-            }
+              }
+            },
+            required: ["nudges"],
+            additionalProperties: false
           }
-        }],
-        tool_choice: { type: "function", function: { name: "create_nudges" } },
-      }),
-    });
+        }
+      }],
+      tool_choice: { type: "function", function: { name: "create_nudges" } },
+    }, userId);
 
     if (!response.ok) {
-      throw new Error(`AI error: ${response.status}`);
+      const errText = await response.text();
+      console.error("AI error:", response.status, errText);
+      try {
+        const parsed = JSON.parse(errText);
+        return new Response(JSON.stringify({ error: parsed.error || "خطا در تولید نادج" }), {
+          status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch {
+        throw new Error(`AI error: ${response.status}`);
+      }
     }
 
     const aiData = await response.json();
     let nudges: any[] = [];
 
-    // Extract from tool call
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     if (toolCall?.function?.arguments) {
       const parsed = JSON.parse(toolCall.function.arguments);
       nudges = parsed.nudges || [];
     }
 
-    // Save nudges to database
     for (const nudge of nudges) {
       await supabase.from("nudges").insert({
         user_id: userId,
