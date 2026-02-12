@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_api_keys: {
+        Row: {
+          api_key: string
+          block_reason: string | null
+          blocked_until: string | null
+          created_at: string
+          failed_requests: number | null
+          id: string
+          is_active: boolean
+          label: string | null
+          last_used_at: string | null
+          provider: string
+          total_requests: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_key: string
+          block_reason?: string | null
+          blocked_until?: string | null
+          created_at?: string
+          failed_requests?: number | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          last_used_at?: string | null
+          provider?: string
+          total_requests?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_key?: string
+          block_reason?: string | null
+          blocked_until?: string | null
+          created_at?: string
+          failed_requests?: number | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          last_used_at?: string | null
+          provider?: string
+          total_requests?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       behavior_events: {
         Row: {
           chain_impact: number | null

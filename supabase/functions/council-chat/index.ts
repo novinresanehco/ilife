@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { makeAIRequest, getUserFromAuth } from "../_shared/ai-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,10 +36,8 @@ serve(async (req) => {
 
   try {
     const { messages, perception, councilMemberId } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const userId = await getUserFromAuth(req.headers.get("Authorization"));
 
-    // Build context from perception model
     let contextAddition = "";
     if (perception) {
       contextAddition = `\n\nمدل درک شخصیتی کاربر:
@@ -56,38 +55,29 @@ serve(async (req) => {
       contextAddition += `\n\nکاربر مستقیماً با عضو "${councilMemberId}" صحبت می‌کند. فقط از دید این عضو پاسخ بده.`;
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: councilSystemPrompt + contextAddition },
-          ...messages,
-        ],
-        stream: true,
-      }),
-    });
+    const response = await makeAIRequest({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: councilSystemPrompt + contextAddition },
+        ...messages,
+      ],
+      stream: true,
+    }, userId);
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "محدودیت درخواست. لطفاً چند لحظه صبر کنید." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const errBody = await response.text();
+      try {
+        const parsed = JSON.parse(errBody);
+        return new Response(JSON.stringify({ error: parsed.error || "خطا در سرویس هوش مصنوعی" }), {
+          status: response.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch {
+        return new Response(JSON.stringify({ error: "خطا در سرویس هوش مصنوعی" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "اعتبار کافی نیست." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      return new Response(JSON.stringify({ error: "خطا در سرویس هوش مصنوعی" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     return new Response(response.body, {
