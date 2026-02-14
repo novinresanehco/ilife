@@ -1,6 +1,6 @@
 /**
- * Hook for text-to-speech using browser SpeechSynthesis API
- * with AI-cleaned text from the backend
+ * Hook for text-to-speech using Gemini TTS API
+ * Returns real audio from the backend and plays it via Audio element
  */
 import { useState, useCallback, useRef } from 'react';
 
@@ -9,72 +9,79 @@ const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speec
 export function useTextToSpeech() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const speak = useCallback(async (text: string) => {
+  const speak = useCallback(async (text: string, voice?: string) => {
     if (!text.trim()) return;
-    
-    // Stop any current speech
-    window.speechSynthesis.cancel();
+
+    // Stop any current audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsSpeaking(false);
     setIsLoading(true);
+    setError(null);
 
     try {
-      // Get cleaned text from backend
       const resp = await fetch(TTS_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, voice }),
       });
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || 'TTS failed');
+        throw new Error(err.error || `خطای TTS: ${resp.status}`);
       }
 
       const data = await resp.json();
-      const cleanedText = data.text || text;
 
-      // Use browser's SpeechSynthesis
-      const utterance = new SpeechSynthesisUtterance(cleanedText);
-      utterance.lang = 'fa-IR';
-      utterance.rate = 0.9;
-      utterance.pitch = 1.0;
+      if (!data.audio) {
+        throw new Error('داده صوتی دریافت نشد');
+      }
 
-      // Try to find a Persian voice
-      const voices = window.speechSynthesis.getVoices();
-      const persianVoice = voices.find(v => v.lang.startsWith('fa')) 
-        || voices.find(v => v.lang.startsWith('ar')) // Arabic as fallback
-        || voices[0];
-      if (persianVoice) utterance.voice = persianVoice;
+      // Play base64 audio using data URI
+      const mimeType = data.mimeType || 'audio/mp3';
+      const audioUrl = `data:${mimeType};base64,${data.audio}`;
+      const audio = new Audio(audioUrl);
 
-      utterance.onstart = () => { setIsSpeaking(true); setIsLoading(false); };
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => { setIsSpeaking(false); setIsLoading(false); };
+      audio.onplay = () => {
+        setIsSpeaking(true);
+        setIsLoading(false);
+      };
+      audio.onended = () => {
+        setIsSpeaking(false);
+        audioRef.current = null;
+      };
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        setIsLoading(false);
+        setError('خطا در پخش صدا');
+        audioRef.current = null;
+      };
 
-      utteranceRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
+      audioRef.current = audio;
+      await audio.play();
+    } catch (e: any) {
       console.error('TTS error:', e);
       setIsLoading(false);
-      
-      // Fallback: use raw text with browser TTS
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'fa-IR';
-      utterance.rate = 0.9;
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(utterance);
+      setError(e.message);
     }
   }, []);
 
   const stop = useCallback(() => {
-    window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
     setIsSpeaking(false);
   }, []);
 
-  return { speak, stop, isSpeaking, isLoading };
+  return { speak, stop, isSpeaking, isLoading, error };
 }
