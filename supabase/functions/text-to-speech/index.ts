@@ -14,6 +14,53 @@ const BLOCK_DURATION_MS = 14 * 60 * 60 * 1000;
 // Persian-friendly voices in Gemini TTS
 const PERSIAN_VOICES = ["Kore", "Puck", "Charon", "Fenrir", "Aoede"];
 
+/** Convert raw PCM (L16) base64 to WAV base64 */
+function pcmToWav(pcmBase64: string, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): string {
+  // Decode base64 PCM
+  const binaryStr = atob(pcmBase64);
+  const pcmBytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    pcmBytes[i] = binaryStr.charCodeAt(i);
+  }
+
+  const dataSize = pcmBytes.length;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+
+  // Create WAV header (44 bytes)
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  // "RIFF" chunk
+  view.setUint8(0, 0x52); view.setUint8(1, 0x49); view.setUint8(2, 0x46); view.setUint8(3, 0x46);
+  view.setUint32(4, 36 + dataSize, true);
+  // "WAVE"
+  view.setUint8(8, 0x57); view.setUint8(9, 0x41); view.setUint8(10, 0x56); view.setUint8(11, 0x45);
+  // "fmt " sub-chunk
+  view.setUint8(12, 0x66); view.setUint8(13, 0x6d); view.setUint8(14, 0x74); view.setUint8(15, 0x20);
+  view.setUint32(16, 16, true); // sub-chunk size
+  view.setUint16(20, 1, true);  // PCM format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  // "data" sub-chunk
+  view.setUint8(36, 0x64); view.setUint8(37, 0x61); view.setUint8(38, 0x74); view.setUint8(39, 0x61);
+  view.setUint32(40, dataSize, true);
+
+  // Copy PCM data
+  const wavBytes = new Uint8Array(buffer);
+  wavBytes.set(pcmBytes, 44);
+
+  // Encode to base64
+  let binary = '';
+  for (let i = 0; i < wavBytes.length; i++) {
+    binary += String.fromCharCode(wavBytes[i]);
+  }
+  return btoa(binary);
+}
+
 interface APIKeyRecord {
   id: string;
   api_key: string;
@@ -116,9 +163,25 @@ serve(async (req) => {
           // Extract audio data from Gemini response
           const audioData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
           if (audioData) {
+            // Gemini TTS returns raw PCM (audio/L16), convert to WAV for browser playback
+            const rawMime = audioData.mimeType || "";
+            let audioBase64 = audioData.data;
+            let finalMime = "audio/wav";
+
+            if (rawMime.includes("L16") || rawMime.includes("pcm") || rawMime.includes("raw")) {
+              // Parse sample rate from mimeType like "audio/L16;rate=24000"
+              const rateMatch = rawMime.match(/rate=(\d+)/);
+              const sampleRate = rateMatch ? parseInt(rateMatch[1]) : 24000;
+              audioBase64 = pcmToWav(audioData.data, sampleRate);
+            } else if (rawMime.includes("mp3") || rawMime.includes("mpeg")) {
+              finalMime = "audio/mp3";
+            } else if (rawMime.includes("wav")) {
+              finalMime = "audio/wav";
+            }
+
             return new Response(JSON.stringify({
-              audio: audioData.data,
-              mimeType: audioData.mimeType || "audio/mp3",
+              audio: audioBase64,
+              mimeType: finalMime,
               voice: selectedVoice,
             }), {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
