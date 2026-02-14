@@ -18,12 +18,13 @@ import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
+import Onboarding from "@/components/Onboarding";
 
 const queryClient = new QueryClient();
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuthContext();
+  const { user, profile, loading } = useAuthContext();
 
   if (loading) {
     return (
@@ -35,6 +36,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // Show onboarding for new users
+  if (profile && !profile.onboarding_completed) {
+    return <Onboarding onComplete={() => window.location.reload()} />;
   }
 
   return (

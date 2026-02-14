@@ -16,144 +16,44 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { persianNumbers, toJalali } from "@/lib/jalali";
 import { 
-  trackEvent, getPerception, generateNudges, 
-  analyzeRecentBehavior, type NudgeMessage 
-} from "@/lib/behaviorMonitor";
-import { 
-  allCouncilMembers, getCouncilConsultation, 
+  allCouncilMembers, 
   type CouncilMember 
 } from "@/lib/councilOfGeniuses";
-import { 
-  getUnansweredQuestions, savePersonalityAnswer,
-  getQuizCompletion, type PersonalityQuestion 
-} from "@/lib/personalityQuiz";
 import { useCouncilChat } from "@/hooks/useCouncilChat";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { useNudges } from "@/hooks/useNudges";
+import { useContextualQuestions } from "@/hooks/useContextualQuestions";
 
-// Using allCouncilMembers from councilOfGeniuses.ts instead of local definition
-
-interface ChatMessage {
-  id: string;
-  content: string;
-  fromSystem: boolean;
-  timestamp: Date;
-  councilMember?: CouncilMember;
-  importance?: number;
-  hasVoice?: boolean;
-}
-
-interface Notification {
-  id: string;
-  content: string;
-  type: 'pursuit' | 'supervision' | 'guidance' | 'info' | 'warning';
-  read: boolean;
-  important: boolean;
-  timestamp: Date;
-  councilMember?: CouncilMember;
-}
-
-interface InteractiveQuestion {
-  id: string;
-  text: string;
-  type: 'likert' | 'radio' | 'descriptive' | 'yesno' | 'scale';
-  options?: string[];
-  answered: boolean;
-  answer?: string | number;
-  category: string;
-  councilMember?: CouncilMember;
-}
-
-// Using allCouncilMembers from councilOfGeniuses.ts
 const councilMembers = allCouncilMembers;
 
-// Mock data for demonstration
-const mockNotifications: Notification[] = [
-  { 
-    id: '1', 
-    content: '⚡ پیگیری: وظیفه «تکمیل گزارش» ۳ روز تأخیر دارد و بر ۲ هدف تأثیر می‌گذارد', 
-    type: 'pursuit', 
-    read: false, 
-    important: true, 
-    timestamp: new Date(),
-    councilMember: councilMembers[1]
-  },
-  { 
-    id: '2', 
-    content: '👁️ نظارت: الگوی تعلل در وظایف صبحگاهی شناسایی شد. پیشنهاد: شروع با کارهای کوچک', 
-    type: 'supervision', 
-    read: false, 
-    important: true, 
-    timestamp: new Date(),
-    councilMember: councilMembers[0]
-  },
-  { 
-    id: '3', 
-    content: '🌟 راهنمایی: بر اساس ویژگی‌های شما، تمرکز ۹۰ دقیقه‌ای صبح بهترین زمان کار عمیق است', 
-    type: 'guidance', 
-    read: true, 
-    important: false, 
-    timestamp: new Date(),
-    councilMember: councilMembers[3]
-  },
-  { 
-    id: '4', 
-    content: 'هدف «یادگیری React» به ۸۰٪ رسید! 🎉', 
-    type: 'info', 
-    read: true, 
-    important: false, 
-    timestamp: new Date() 
-  },
-];
-
-const mockQuestions: InteractiveQuestion[] = [
-  { 
-    id: 'q1', 
-    text: 'به نظر می‌رسد کمال‌گرایی باعث تأخیر در تحویل پروژه شده. آیا این حس را دارید؟', 
-    type: 'likert', 
-    answered: false,
-    category: 'تحلیل رفتار',
-    councilMember: councilMembers[0]
-  },
-  { 
-    id: 'q2', 
-    text: 'کدام مانع اصلی پیشرفت این هفته بود؟', 
-    type: 'radio',
-    options: ['کمبود زمان', 'کمبود انرژی', 'حواس‌پرتی', 'عدم وضوح هدف', 'موانع خارجی'],
-    answered: false,
-    category: 'موانع',
-    councilMember: councilMembers[1]
-  },
-  { 
-    id: 'q3', 
-    text: 'سطح انرژی شما الان چقدر است؟', 
-    type: 'scale', 
-    answered: false,
-    category: 'سلامت',
-    councilMember: councilMembers[3]
-  },
-];
-
-const typeStyles = {
+const typeStyles: Record<string, string> = {
   pursuit: 'bg-amber-500/10 border-amber-500/30 text-amber-600',
   supervision: 'bg-purple-500/10 border-purple-500/30 text-purple-600',
   guidance: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600',
+  question: 'bg-blue-500/10 border-blue-500/30 text-blue-600',
+  celebration: 'bg-pink-500/10 border-pink-500/30 text-pink-600',
   info: 'bg-primary/10 border-primary/30 text-primary',
   warning: 'bg-destructive/10 border-destructive/30 text-destructive',
 };
 
-const typeLabels = {
+const typeLabels: Record<string, string> = {
   pursuit: 'پیگیری',
   supervision: 'نظارت',
   guidance: 'راهنمایی',
+  question: 'سوال',
+  celebration: 'تبریک',
   info: 'اطلاع',
   warning: 'هشدار',
 };
 
+function getCouncilMemberById(id: string | null): CouncilMember | undefined {
+  if (!id) return undefined;
+  return councilMembers.find(m => m.id === id);
+}
+
 export const FloatingChatBox = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
-  const [questions, setQuestions] = useState<InteractiveQuestion[]>(mockQuestions);
   const [newMessage, setNewMessage] = useState('');
   const [scaleValue, setScaleValue] = useState([5]);
   const [descriptiveAnswer, setDescriptiveAnswer] = useState('');
@@ -163,11 +63,28 @@ export const FloatingChatBox = () => {
   const { messages: aiMessages, isLoading: aiLoading, sendMessage: sendAIMessage } = useCouncilChat();
   
   // TTS hook
-  const { speak, stop, isSpeaking, isLoading: ttsLoading } = useTextToSpeech();
+  const { speak, stop, isSpeaking } = useTextToSpeech();
 
-  const unreadNotifications = notifications.filter(n => !n.read).length;
-  const unansweredQuestions = questions.filter(q => !q.answered).length;
-  const totalBadge = unreadNotifications + unansweredQuestions;
+  // Real nudges from DB
+  const { 
+    nudges, unreadCount, markAsRead, dismissNudge, autoOpenNudges 
+  } = useNudges();
+
+  // Real contextual questions from DB
+  const { 
+    questions: dbQuestions, answerQuestion: answerDbQuestion, skipQuestion 
+  } = useContextualQuestions();
+
+  const unansweredQuestions = dbQuestions?.filter(q => !q.answered_at && !q.skipped)?.length ?? 0;
+  const totalBadge = unreadCount + unansweredQuestions;
+
+  // Auto-open for important nudges
+  useEffect(() => {
+    if (autoOpenNudges.length > 0 && !isOpen) {
+      setIsOpen(true);
+      setActiveTab('notifications');
+    }
+  }, [autoOpenNudges.length]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -180,33 +97,24 @@ export const FloatingChatBox = () => {
     setNewMessage('');
   };
 
-  const markAsRead = (id: string) => {
-    setNotifications(notifications.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    ));
-  };
-
-  const answerQuestion = (questionId: string, answer: string | number) => {
-    setQuestions(questions.map(q => 
-      q.id === questionId ? { ...q, answered: true, answer } : q
-    ));
-  };
-
-  const renderQuestionInput = (question: InteractiveQuestion) => {
-    if (question.answered) {
+  const renderQuestionInput = (question: any) => {
+    if (question.answered_at) {
       return (
         <div className="flex items-center gap-2 text-emerald-600">
           <CheckCheck className="w-4 h-4" />
-          <span className="text-sm">پاسخ داده شده</span>
+          <span className="text-sm">پاسخ داده شده: {question.answer}</span>
         </div>
       );
     }
 
-    switch (question.type) {
+    const qType = question.question_type;
+    const options = question.options as string[] | null;
+
+    switch (qType) {
       case 'likert':
         return (
           <RadioGroup 
-            onValueChange={(v) => answerQuestion(question.id, v)}
+            onValueChange={(v) => answerDbQuestion({ questionId: question.id, answer: v })}
             className="flex gap-1 flex-wrap"
           >
             {['کاملاً مخالف', 'مخالف', 'متوسط', 'موافق', 'کاملاً موافق'].map((label, i) => (
@@ -221,10 +129,10 @@ export const FloatingChatBox = () => {
       case 'radio':
         return (
           <RadioGroup 
-            onValueChange={(v) => answerQuestion(question.id, v)}
+            onValueChange={(v) => answerDbQuestion({ questionId: question.id, answer: v })}
             className="space-y-1"
           >
-            {question.options?.map((option) => (
+            {options?.map((option: string) => (
               <div key={option} className="flex items-center gap-2">
                 <RadioGroupItem value={option} id={`${question.id}-${option}`} className="h-3 w-3" />
                 <Label htmlFor={`${question.id}-${option}`} className="text-xs">{option}</Label>
@@ -247,7 +155,7 @@ export const FloatingChatBox = () => {
               className="h-7 text-xs"
               onClick={() => {
                 if (descriptiveAnswer.trim()) {
-                  answerQuestion(question.id, descriptiveAnswer);
+                  answerDbQuestion({ questionId: question.id, answer: descriptiveAnswer });
                   setDescriptiveAnswer('');
                 }
               }}
@@ -264,7 +172,7 @@ export const FloatingChatBox = () => {
               variant="outline" 
               size="sm"
               className="gap-1 flex-1 h-7 text-xs"
-              onClick={() => answerQuestion(question.id, 'yes')}
+              onClick={() => answerDbQuestion({ questionId: question.id, answer: 'yes' })}
             >
               <ThumbsUp className="w-3 h-3" />
               بله
@@ -273,7 +181,7 @@ export const FloatingChatBox = () => {
               variant="outline" 
               size="sm"
               className="gap-1 flex-1 h-7 text-xs"
-              onClick={() => answerQuestion(question.id, 'no')}
+              onClick={() => answerDbQuestion({ questionId: question.id, answer: 'no' })}
             >
               <ThumbsDown className="w-3 h-3" />
               خیر
@@ -300,7 +208,7 @@ export const FloatingChatBox = () => {
             <Button 
               size="sm"
               className="h-7 text-xs"
-              onClick={() => answerQuestion(question.id, scaleValue[0])}
+              onClick={() => answerDbQuestion({ questionId: question.id, answer: String(scaleValue[0]) })}
             >
               ثبت
             </Button>
@@ -377,9 +285,9 @@ export const FloatingChatBox = () => {
                 <TabsTrigger value="notifications" className="text-xs gap-1 h-9 relative">
                   <Bell className="w-3 h-3" />
                   اعلان‌ها
-                  {unreadNotifications > 0 && (
+                  {unreadCount > 0 && (
                     <Badge variant="destructive" className="h-4 w-4 p-0 text-[10px] absolute -top-0.5 -right-0.5">
-                      {persianNumbers(unreadNotifications)}
+                      {persianNumbers(unreadCount)}
                     </Badge>
                   )}
                 </TabsTrigger>
@@ -454,86 +362,122 @@ export const FloatingChatBox = () => {
                 </div>
               </TabsContent>
 
-              {/* Questions Tab */}
+              {/* Questions Tab - Real DB questions */}
               <TabsContent value="questions" className="m-0">
                 <ScrollArea className="h-[340px]">
                   <div className="p-3 space-y-3">
-                    {questions.map((question) => (
+                    {(!dbQuestions || dbQuestions.length === 0) && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <HelpCircle className="w-8 h-8 mx-auto mb-2" />
+                        <p className="text-xs">سوال جدیدی وجود ندارد</p>
+                      </div>
+                    )}
+                    {dbQuestions?.map((question) => (
                       <div 
                         key={question.id}
                         className={cn(
                           "bg-accent/50 rounded-xl p-3 border border-border",
-                          question.answered && "opacity-60"
+                          question.answered_at && "opacity-60"
                         )}
                       >
-                        {question.councilMember && (
+                        {question.council_member && (
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="text-sm">{question.councilMember.avatar}</span>
-                            <span className="text-xs text-muted-foreground">{question.councilMember.name}</span>
-                            <Badge variant="outline" className="text-[10px] h-5 mr-auto">{question.category}</Badge>
+                            <span className="text-sm">{getCouncilMemberById(question.council_member)?.avatar || '🤖'}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {getCouncilMemberById(question.council_member)?.name || 'سیستم'}
+                            </span>
+                            {question.category && (
+                              <Badge variant="outline" className="text-[10px] h-5 mr-auto">{question.category}</Badge>
+                            )}
                           </div>
                         )}
-                        <p className="text-xs font-medium mb-3">{question.text}</p>
+                        <p className="text-xs font-medium mb-3">{question.question_text}</p>
                         {renderQuestionInput(question)}
+                        {!question.answered_at && !question.skipped && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 text-[10px] mt-2"
+                            onClick={() => skipQuestion(question.id)}
+                          >
+                            رد شدن
+                          </Button>
+                        )}
                       </div>
                     ))}
-                    {questions.every(q => q.answered) && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <CheckCheck className="w-8 h-8 mx-auto mb-2 text-emerald-500" />
-                        <p className="text-xs">همه سوالات پاسخ داده شده!</p>
-                      </div>
-                    )}
                   </div>
                 </ScrollArea>
               </TabsContent>
 
-              {/* Notifications Tab */}
+              {/* Notifications Tab - Real nudges from DB */}
               <TabsContent value="notifications" className="m-0">
                 <ScrollArea className="h-[340px]">
                   <div className="p-3 space-y-2">
-                    {notifications.map((notification) => (
-                      <div 
-                        key={notification.id}
-                        className={cn(
-                          "p-3 rounded-xl border transition-all cursor-pointer",
-                          typeStyles[notification.type],
-                          !notification.read && "ring-2 ring-offset-1 ring-primary/30"
-                        )}
-                        onClick={() => markAsRead(notification.id)}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div className="mt-0.5">
-                            {notification.read ? (
-                              <CheckCheck className="w-3 h-3" />
-                            ) : (
-                              <Circle className="w-3 h-3 fill-current" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            {notification.councilMember && (
-                              <div className="flex items-center gap-1 mb-1">
-                                <span className="text-sm">{notification.councilMember.avatar}</span>
-                                <span className="text-[10px] text-muted-foreground">{notification.councilMember.name}</span>
-                              </div>
-                            )}
-                            <p className={cn("text-xs", !notification.read && "font-medium")}>
-                              {notification.content}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] opacity-70">{toJalali(notification.timestamp)}</span>
-                              <Badge variant="outline" className="text-[10px] h-4">
-                                {typeLabels[notification.type]}
-                              </Badge>
-                            </div>
-                          </div>
-                          {notification.important && (
-                            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0">
-                              <Play className="w-3 h-3" />
-                            </Button>
-                          )}
-                        </div>
+                    {nudges.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Bell className="w-8 h-8 mx-auto mb-2" />
+                        <p className="text-xs">اعلان جدیدی وجود ندارد</p>
                       </div>
-                    ))}
+                    )}
+                    {nudges.map((nudge) => {
+                      const member = getCouncilMemberById(nudge.council_member);
+                      const isRead = !!nudge.read_at;
+                      const nudgeType = nudge.nudge_type || 'info';
+                      
+                      return (
+                        <div 
+                          key={nudge.id}
+                          className={cn(
+                            "p-3 rounded-xl border transition-all cursor-pointer",
+                            typeStyles[nudgeType] || typeStyles.info,
+                            !isRead && "ring-2 ring-offset-1 ring-primary/30"
+                          )}
+                          onClick={() => !isRead && markAsRead(nudge.id)}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="mt-0.5">
+                              {isRead ? (
+                                <CheckCheck className="w-3 h-3" />
+                              ) : (
+                                <Circle className="w-3 h-3 fill-current" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              {member && (
+                                <div className="flex items-center gap-1 mb-1">
+                                  <span className="text-sm">{member.avatar}</span>
+                                  <span className="text-[10px] text-muted-foreground">{member.name}</span>
+                                </div>
+                              )}
+                              <p className={cn("text-xs", !isRead && "font-medium")}>
+                                {nudge.content}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] opacity-70">
+                                  {toJalali(new Date(nudge.created_at))}
+                                </span>
+                                <Badge variant="outline" className="text-[10px] h-4">
+                                  {typeLabels[nudgeType] || nudgeType}
+                                </Badge>
+                              </div>
+                            </div>
+                            {!isRead && nudge.importance && nudge.importance >= 70 && (
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                className="h-6 w-6 shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  speak(nudge.content);
+                                }}
+                              >
+                                <Volume2 className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </ScrollArea>
               </TabsContent>
