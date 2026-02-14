@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { User, Award, Brain, ChevronLeft, ChevronRight, CheckCircle, RotateCcw } from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Award, Brain, ChevronLeft, ChevronRight, CheckCircle, RotateCcw, Activity, Zap, Target, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { persianNumbers } from "@/lib/jalali";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface QuizQuestion {
   id: string;
@@ -29,7 +33,6 @@ const bigFiveQuestions: QuizQuestion[] = [
   { id: 'o8', text: 'خلاقیت در حل مسائل برایم مهم است', trait: 'O', reverse: false },
   { id: 'o9', text: 'از یادگیری چیزهای جدید لذت می‌برم', trait: 'O', reverse: false },
   { id: 'o10', text: 'ذهن باز و پذیرای نظرات مختلف هستم', trait: 'O', reverse: false },
-  
   // Conscientiousness (10 questions)
   { id: 'c1', text: 'همیشه کارها را به موقع انجام می‌دهم', trait: 'C', reverse: false },
   { id: 'c2', text: 'به جزئیات توجه زیادی دارم', trait: 'C', reverse: false },
@@ -41,7 +44,6 @@ const bigFiveQuestions: QuizQuestion[] = [
   { id: 'c8', text: 'مسئولیت‌پذیر و قابل اعتماد هستم', trait: 'C', reverse: false },
   { id: 'c9', text: 'کارها را تا آخر پیگیری می‌کنم', trait: 'C', reverse: false },
   { id: 'c10', text: 'در مدیریت زمان مهارت دارم', trait: 'C', reverse: false },
-  
   // Extraversion (10 questions)
   { id: 'e1', text: 'در جمع‌ها احساس انرژی می‌کنم', trait: 'E', reverse: false },
   { id: 'e2', text: 'به راحتی با افراد جدید آشنا می‌شوم', trait: 'E', reverse: false },
@@ -53,7 +55,6 @@ const bigFiveQuestions: QuizQuestion[] = [
   { id: 'e8', text: 'به راحتی احساساتم را بیان می‌کنم', trait: 'E', reverse: false },
   { id: 'e9', text: 'در گروه‌ها نقش رهبری می‌گیرم', trait: 'E', reverse: false },
   { id: 'e10', text: 'فعالیت‌های هیجان‌انگیز را دوست دارم', trait: 'E', reverse: false },
-  
   // Agreeableness (10 questions)
   { id: 'a1', text: 'به دیگران اعتماد می‌کنم', trait: 'A', reverse: false },
   { id: 'a2', text: 'با دیگران همدردی می‌کنم', trait: 'A', reverse: false },
@@ -65,7 +66,6 @@ const bigFiveQuestions: QuizQuestion[] = [
   { id: 'a8', text: 'فروتن و متواضع هستم', trait: 'A', reverse: false },
   { id: 'a9', text: 'همکاری را به رقابت ترجیح می‌دهم', trait: 'A', reverse: false },
   { id: 'a10', text: 'به راحتی دیگران را می‌بخشم', trait: 'A', reverse: false },
-  
   // Neuroticism (10 questions)
   { id: 'n1', text: 'به راحتی استرس می‌گیرم', trait: 'N', reverse: false },
   { id: 'n2', text: 'گاهی احساس غمگینی می‌کنم', trait: 'N', reverse: false },
@@ -95,11 +95,58 @@ const likertOptions = [
   { value: 5, label: 'کاملاً موافق' },
 ];
 
+const behaviorLabels: Record<string, { name: string; icon: any; description: string }> = {
+  procrastination: { name: 'تعلل', icon: Activity, description: 'میزان تمایل به تأخیر در کارها' },
+  perfectionism: { name: 'کمال‌گرایی', icon: Target, description: 'میزان تلاش برای بی‌نقص بودن' },
+  overwhelm: { name: 'فشار کاری', icon: Activity, description: 'احساس غرق شدن در کارها' },
+  motivation: { name: 'انگیزه', icon: Zap, description: 'سطح انگیزش و پشتکار' },
+  consistency: { name: 'ثبات عملکرد', icon: TrendingUp, description: 'پایداری در انجام کارها' },
+  energy_level: { name: 'سطح انرژی', icon: Zap, description: 'انرژی و سرزندگی روزانه' },
+};
+
 const Profile = () => {
+  const { user, profile, perception, updatePerception } = useAuthContext();
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [showQuiz, setShowQuiz] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Fetch real stats from DB
+  const { data: stats } = useQuery({
+    queryKey: ['profile-stats', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const [tasksRes, goalsRes, answersRes] = await Promise.all([
+        supabase.from('tasks').select('id', { count: 'exact' }).eq('user_id', user.id).eq('status', 'done'),
+        supabase.from('goals').select('id', { count: 'exact' }).eq('user_id', user.id).eq('status', 'active'),
+        supabase.from('personality_answers').select('id', { count: 'exact' }).eq('user_id', user.id),
+      ]);
+      return {
+        completedTasks: tasksRes.count ?? 0,
+        activeGoals: goalsRes.count ?? 0,
+        answeredQuestions: answersRes.count ?? 0,
+      };
+    },
+    enabled: !!user,
+  });
+
+  // Load previously saved answers
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('personality_answers')
+      .select('question_id, answer_value')
+      .eq('user_id', user.id)
+      .eq('source', 'bigfive_quiz')
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const saved: Record<string, number> = {};
+          data.forEach(a => { saved[a.question_id] = parseInt(a.answer_value); });
+          setAnswers(saved);
+        }
+      });
+  }, [user]);
 
   const question = bigFiveQuestions[currentQuestion];
   const quizProgress = (Object.keys(answers).length / bigFiveQuestions.length) * 100;
@@ -115,30 +162,35 @@ const Profile = () => {
     const traitQuestions = bigFiveQuestions.filter(q => q.trait === trait);
     let score = 0;
     let answered = 0;
-    
     traitQuestions.forEach(q => {
       if (answers[q.id] !== undefined) {
         answered++;
-        if (q.reverse) {
-          score += (6 - answers[q.id]);
-        } else {
-          score += answers[q.id];
-        }
+        score += q.reverse ? (6 - answers[q.id]) : answers[q.id];
       }
     });
-    
     if (answered === 0) return 0;
-    
-    // Convert to percentage (max score per trait = 50, min = 10)
     return Math.round(((score - 10) / 40) * 100);
   };
 
+  // Use perception from DB if available, otherwise calculate from local answers
+  const getTraitValue = (trait: string): number => {
+    if (perception && Object.keys(answers).length === 0) {
+      const map: Record<string, keyof typeof perception> = {
+        O: 'openness', C: 'conscientiousness', E: 'extraversion', A: 'agreeableness', N: 'neuroticism'
+      };
+      const val = perception[map[trait]];
+      return trait === 'N' ? 100 - (val ?? 50) : (val ?? 50);
+    }
+    const score = calculateTraitScore(trait);
+    return trait === 'N' ? 100 - score : score;
+  };
+
   const traits = [
-    { key: 'O', ...traitLabels.O, score: calculateTraitScore('O') },
-    { key: 'C', ...traitLabels.C, score: calculateTraitScore('C') },
-    { key: 'E', ...traitLabels.E, score: calculateTraitScore('E') },
-    { key: 'A', ...traitLabels.A, score: calculateTraitScore('A') },
-    { key: 'N', ...traitLabels.N, score: 100 - calculateTraitScore('N') }, // Reverse for "stability"
+    { key: 'O', ...traitLabels.O, score: getTraitValue('O') },
+    { key: 'C', ...traitLabels.C, score: getTraitValue('C') },
+    { key: 'E', ...traitLabels.E, score: getTraitValue('E') },
+    { key: 'A', ...traitLabels.A, score: getTraitValue('A') },
+    { key: 'N', ...traitLabels.N, score: getTraitValue('N') },
   ];
 
   const resetQuiz = () => {
@@ -148,7 +200,53 @@ const Profile = () => {
     setShowQuiz(true);
   };
 
-  const finishQuiz = () => {
+  const finishQuiz = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    
+    try {
+      // Save all answers to personality_answers
+      const upserts = Object.entries(answers).map(([qId, val]) => ({
+        user_id: user.id,
+        question_id: qId,
+        answer_value: String(val),
+        answer_type: 'likert',
+        source: 'bigfive_quiz',
+        confidence: 100,
+      }));
+
+      // Upsert answers (delete old ones first, then insert)
+      await supabase
+        .from('personality_answers')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('source', 'bigfive_quiz');
+
+      const { error: insertError } = await supabase
+        .from('personality_answers')
+        .insert(upserts);
+
+      if (insertError) throw insertError;
+
+      // Update perception model with Big Five scores
+      const scores = {
+        openness: calculateTraitScore('O'),
+        conscientiousness: calculateTraitScore('C'),
+        extraversion: calculateTraitScore('E'),
+        agreeableness: calculateTraitScore('A'),
+        neuroticism: calculateTraitScore('N'),
+        confidence_score: Math.min(100, (perception?.confidence_score ?? 20) + 30),
+      };
+      
+      await updatePerception(scores);
+      toast.success('نتایج آزمون ذخیره و مدل ادراکی به‌روزرسانی شد');
+    } catch (e) {
+      console.error('Error saving quiz:', e);
+      toast.error('خطا در ذخیره نتایج');
+    } finally {
+      setIsSaving(false);
+    }
+
     setShowResults(true);
     setShowQuiz(false);
   };
@@ -182,23 +280,24 @@ const Profile = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">پروفایل</h1>
-          <p className="text-muted-foreground mt-1">اطلاعات شخصی و تحلیل شخصیت</p>
+          <p className="text-muted-foreground mt-1">اطلاعات شخصی، تحلیل شخصیت و آمار رفتاری</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* User Info Card */}
         <Card className="lg:col-span-1">
           <CardContent className="pt-6">
             <div className="text-center">
               <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <User className="w-12 h-12 text-primary" />
               </div>
-              <h2 className="text-xl font-bold">کاربر LifeOS</h2>
-              <p className="text-muted-foreground text-sm">عضو از ۱۴۰۳</p>
+              <h2 className="text-xl font-bold">{profile?.display_name || 'کاربر LifeOS'}</h2>
+              <p className="text-muted-foreground text-sm">{user?.email}</p>
               <div className="flex items-center justify-center gap-2 mt-4">
                 <Badge variant="secondary" className="gap-1">
                   <Award className="w-3 h-3" />
-                  سطح طلایی
+                  اعتماد AI: {persianNumbers(perception?.confidence_score ?? 20)}%
                 </Badge>
               </div>
             </div>
@@ -206,24 +305,21 @@ const Profile = () => {
             <div className="mt-6 pt-6 border-t border-border space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">وظایف تکمیل‌شده</span>
-                <span className="font-semibold">{persianNumbers(156)}</span>
+                <span className="font-semibold">{persianNumbers(stats?.completedTasks ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">اهداف فعال</span>
-                <span className="font-semibold">{persianNumbers(4)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">روزهای فعال متوالی</span>
-                <span className="font-semibold">{persianNumbers(23)}</span>
+                <span className="font-semibold">{persianNumbers(stats?.activeGoals ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">سوالات پاسخ داده</span>
-                <span className="font-semibold">{persianNumbers(Object.keys(answers).length)}/{persianNumbers(50)}</span>
+                <span className="font-semibold">{persianNumbers(stats?.answeredQuestions ?? 0)}</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
+        {/* Big Five Card */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -236,6 +332,11 @@ const Profile = () => {
               <>
                 <p className="text-muted-foreground mb-6">
                   آزمون شخصیت Big Five شامل ۵۰ سوال است که ۵ ویژگی اصلی شخصیت شما را ارزیابی می‌کند.
+                  {perception && perception.confidence_score > 20 && (
+                    <span className="block mt-1 text-primary text-sm">
+                      مقادیر فعلی بر اساس مدل ادراکی AI نمایش داده می‌شود.
+                    </span>
+                  )}
                 </p>
                 <div className="space-y-4 mb-6">
                   {traits.map((trait) => (
@@ -313,8 +414,8 @@ const Profile = () => {
                     <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
                     <h3 className="text-xl font-bold mb-2">آزمون تکمیل شد!</h3>
                     <p className="text-muted-foreground mb-4">همه ۵۰ سوال پاسخ داده شد</p>
-                    <Button onClick={finishQuiz}>
-                      مشاهده نتایج
+                    <Button onClick={finishQuiz} disabled={isSaving}>
+                      {isSaving ? 'در حال ذخیره...' : 'مشاهده نتایج'}
                     </Button>
                   </div>
                 )}
@@ -337,8 +438,8 @@ const Profile = () => {
                         خروج
                       </Button>
                       {answers[question.id] !== undefined && currentQuestion === bigFiveQuestions.length - 1 && (
-                        <Button onClick={finishQuiz}>
-                          اتمام و نتایج
+                        <Button onClick={finishQuiz} disabled={isSaving}>
+                          {isSaving ? 'ذخیره...' : 'اتمام و نتایج'}
                         </Button>
                       )}
                       {answers[question.id] !== undefined && currentQuestion < bigFiveQuestions.length - 1 && (
@@ -356,7 +457,7 @@ const Profile = () => {
                 <div className="text-center pb-4 border-b border-border">
                   <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
                   <h3 className="text-xl font-bold">نتایج تحلیل شخصیت شما</h3>
-                  <p className="text-sm text-muted-foreground">بر اساس مدل Big Five</p>
+                  <p className="text-sm text-muted-foreground">بر اساس مدل Big Five — ذخیره شده در مدل ادراکی</p>
                 </div>
                 
                 <div className="space-y-6">
@@ -401,6 +502,56 @@ const Profile = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Behavioral Stats Section - from perception model */}
+      {perception && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="w-5 h-5 text-primary" />
+              آمار رفتاری (مدل ادراکی AI)
+              <Badge variant="outline" className="mr-auto">
+                اعتماد: {persianNumbers(perception.confidence_score)}%
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(behaviorLabels).map(([key, { name, icon: Icon, description }]) => {
+                const value = perception[key as keyof typeof perception] as number;
+                const isPositive = key === 'motivation' || key === 'consistency' || key === 'energy_level';
+                const colorClass = isPositive 
+                  ? (value >= 70 ? 'text-emerald-600' : value >= 40 ? 'text-amber-600' : 'text-destructive')
+                  : (value <= 30 ? 'text-emerald-600' : value <= 60 ? 'text-amber-600' : 'text-destructive');
+                
+                return (
+                  <div key={key} className="bg-accent/30 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Icon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">{name}</span>
+                      </div>
+                      <span className={cn("font-bold text-lg", colorClass)}>
+                        {persianNumbers(value ?? 0)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{description}</p>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          isPositive ? 'bg-emerald-500' : 'bg-amber-500'
+                        )}
+                        style={{ width: `${value ?? 0}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
